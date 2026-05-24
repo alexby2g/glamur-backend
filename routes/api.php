@@ -6,6 +6,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SetupController;
 
 /*
 |--------------------------------------------------------------------------
@@ -94,6 +95,11 @@ Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistori
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/me', [AuthController::class, 'me']);
 Route::post('/logout', [AuthController::class, 'logout']);
+
+// =====================
+// ⚙️ SETUP TEMPORAL
+// =====================
+Route::get('/setup-admin', [SetupController::class, 'instalar']);
 
 // =====================================================
 // 📊 DASHBOARD
