@@ -8,7 +8,7 @@ use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Middleware\VerificarTokenSistema;
-
+use App\Http\Controllers\NotificacionController;
 /*
 |--------------------------------------------------------------------------
 | API ROUTES GLAMUR
@@ -26,6 +26,13 @@ Route::post('/register', [AuthController::class, 'register']);
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
 Route::middleware([VerificarTokenSistema::class])->group(function () {
+        // =====================================================
+    // 🔔 NOTIFICACIONES
+    // =====================================================
+    Route::get('/notificaciones', [NotificacionController::class, 'index']);
+    Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'marcarTodasLeidas']);
+    Route::put('/notificaciones/{id}/leer', [NotificacionController::class, 'marcarLeida']);
+    Route::delete('/notificaciones/limpiar', [NotificacionController::class, 'limpiar']);
 
     // =====================================================
     // 🔐 SESIÓN
