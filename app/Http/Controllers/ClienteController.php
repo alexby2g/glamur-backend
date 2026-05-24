@@ -125,33 +125,40 @@ class ClienteController extends Controller
         }
 
         $resultado = $clientes->map(function ($cliente) {
-            $pagos = $cliente->citas
-                ->flatMap(function ($cita) {
-                    return $cita->pagos->map(function ($pago) use ($cita) {
-                        return [
-                            'id' => $pago->id,
-                            'cita_id' => $pago->cita_id,
-                            'monto' => $pago->monto,
-                            'metodo' => $pago->metodo,
-                            'estado' => $pago->estado,
-                            'fecha_pago' => $pago->fecha_pago,
-                            'created_at' => $pago->created_at,
-                            'updated_at' => $pago->updated_at,
+            $pagos = collect();
 
-                            'servicio' => $cita->servicio,
-                            'precio_cita' => $cita->precio,
-                            'fecha_cita' => $cita->fecha,
-                            'hora_cita' => $cita->hora,
-                            'estado_cita' => $cita->estado,
-                            'estado_pago_cita' => $cita->estado_pago,
-                            'metodo_pago_cita' => $cita->metodo_pago,
-                        ];
-                    });
-                })
+            foreach ($cliente->citas as $cita) {
+                foreach ($cita->pagos as $pago) {
+                    $pagos->push([
+                        'id' => $pago->id,
+                        'cita_id' => $pago->cita_id,
+                        'monto' => $pago->monto,
+                        'metodo' => $pago->metodo,
+                        'estado' => $pago->estado,
+                        'fecha_pago' => $pago->fecha_pago,
+                        'created_at' => $pago->created_at,
+                        'updated_at' => $pago->updated_at,
+
+                        'servicio' => $cita->servicio,
+                        'precio_cita' => $cita->precio,
+                        'fecha_cita' => $cita->fecha,
+                        'hora_cita' => $cita->hora,
+                        'estado_cita' => $cita->estado,
+                        'estado_pago_cita' => $cita->estado_pago,
+                        'metodo_pago_cita' => $cita->metodo_pago,
+                    ]);
+                }
+            }
+
+            $pagos = $pagos
                 ->sortByDesc(function ($pago) {
                     return $pago['fecha_pago'] ?? $pago['created_at'];
                 })
                 ->values();
+
+            $totalPagado = $pagos->sum(function ($pago) {
+                return floatval($pago['monto'] ?? 0);
+            });
 
             return [
                 'id' => $cliente->id,
@@ -163,9 +170,7 @@ class ClienteController extends Controller
                 'citas_pendientes' => $cliente->citas->where('estado', 'pendiente')->count(),
                 'citas_concluidas' => $cliente->citas->where('estado', 'concluida')->count(),
 
-                'total_pagado' => $pagos->sum(function ($pago) {
-                    return floatval($pago['monto'] ?? 0);
-                }),
+                'total_pagado' => $totalPagado,
 
                 'citas' => $cliente->citas,
                 'pagos' => $pagos,
