@@ -38,6 +38,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // 💅 SERVICIOS / COMBOS
     // =====================================================
     Route::get('/servicios', [ServicioController::class, 'index']);
+    Route::post('/servicios/cargar-base', [ServicioController::class, 'cargarBase']);
     Route::post('/servicios', [ServicioController::class, 'store']);
     Route::put('/servicios/{id}', [ServicioController::class, 'update']);
     Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
@@ -51,7 +52,6 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::put('/clientes/{id}', [ClienteController::class, 'update']);
     Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
 
-    // 📜 HISTORIAL DEL CLIENTE
     Route::get('/clientes/historial/buscar', [ClienteController::class, 'historial']);
 
 
@@ -92,4 +92,5 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // 📊 DASHBOARD
     // =====================================================
     Route::get('/dashboard', [CitaController::class, 'dashboard']);
+
 });
