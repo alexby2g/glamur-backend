@@ -34,6 +34,59 @@ class AuthController extends Controller
         return UsuarioSistema::where('token', $token)->first();
     }
 
+    // =====================================================
+    // 📝 REGISTRO DE USUARIO DEL SISTEMA
+    // =====================================================
+    public function register(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'nombre' => 'required|string|max:255',
+            'usuario' => 'required|email|max:255|unique:usuario_sistemas,usuario',
+            'password' => 'required|string|min:6|confirmed',
+        ], [
+            'nombre.required' => 'El nombre completo es obligatorio.',
+            'usuario.required' => 'El correo Gmail es obligatorio.',
+            'usuario.email' => 'Debes ingresar un correo válido.',
+            'usuario.unique' => 'Este usuario ya está registrado.',
+            'password.required' => 'La contraseña es obligatoria.',
+            'password.min' => 'La contraseña debe tener mínimo 6 caracteres.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        if (!str_ends_with(strtolower($request->usuario), '@gmail.com')) {
+            return response()->json([
+                'message' => 'Solo se permiten correos Gmail.'
+            ], 422);
+        }
+
+        $usuario = UsuarioSistema::create([
+            'nombre' => trim($request->nombre),
+            'usuario' => strtolower(trim($request->usuario)),
+            'password' => $request->password,
+            'activo' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'Usuario creado correctamente.',
+            'usuario' => [
+                'id' => $usuario->id,
+                'nombre' => $usuario->nombre,
+                'usuario' => $usuario->usuario,
+                'activo' => $usuario->activo,
+            ]
+        ], 201);
+    }
+
+    // =====================================================
+    // 🔐 LOGIN
+    // =====================================================
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -51,7 +104,9 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $usuario = UsuarioSistema::where('usuario', $request->usuario)->first();
+        $usuarioInput = strtolower(trim($request->usuario));
+
+        $usuario = UsuarioSistema::where('usuario', $usuarioInput)->first();
 
         if (!$usuario || !Hash::check($request->password, $usuario->password)) {
             return response()->json([
@@ -85,6 +140,9 @@ class AuthController extends Controller
         ]);
     }
 
+    // =====================================================
+    // 👤 USUARIO ACTUAL
+    // =====================================================
     public function me(Request $request)
     {
         $usuario = $this->usuarioDesdeRequest($request);
@@ -106,6 +164,9 @@ class AuthController extends Controller
         ]);
     }
 
+    // =====================================================
+    // 🚪 CERRAR SESIÓN
+    // =====================================================
     public function logout(Request $request)
     {
         $usuario = $this->usuarioDesdeRequest($request);

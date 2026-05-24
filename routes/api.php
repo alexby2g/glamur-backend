@@ -18,6 +18,10 @@ use App\Http\Middleware\VerificarTokenSistema;
 // 🔐 AUTENTICACIÓN PÚBLICA
 // =====================================================
 
+// 📝 Crear cuenta con Gmail
+Route::post('/register', [AuthController::class, 'register']);
+
+// 🔑 Iniciar sesión
 Route::post('/login', [AuthController::class, 'login']);
 
 
@@ -43,9 +47,6 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
 
     // 📜 HISTORIAL DEL CLIENTE
-    // Ejemplo:
-    // /api/clientes/historial/buscar?buscar=juan
-    // /api/clientes/historial/buscar?buscar=76543210
     Route::get('/clientes/historial/buscar', [ClienteController::class, 'historial']);
 
 
