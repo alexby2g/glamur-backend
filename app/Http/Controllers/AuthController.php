@@ -17,26 +17,6 @@ class AuthController extends Controller
             ?: $request->input('token');
     }
 
-    private function usuarioDesdeRequest(Request $request)
-    {
-        $usuario = $request->attributes->get('usuario_sistema');
-
-        if ($usuario) {
-            return $usuario;
-        }
-
-        $token = $this->obtenerToken($request);
-
-        if (!$token) {
-            return null;
-        }
-
-        return UsuarioSistema::where('token', $token)->first();
-    }
-
-    // =====================================================
-    // 📝 REGISTRO DE USUARIO DEL SISTEMA
-    // =====================================================
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -46,8 +26,8 @@ class AuthController extends Controller
         ], [
             'nombre.required' => 'El nombre completo es obligatorio.',
             'usuario.required' => 'El correo Gmail es obligatorio.',
-            'usuario.email' => 'Debes ingresar un correo válido.',
-            'usuario.unique' => 'Este usuario ya está registrado.',
+            'usuario.email' => 'Debe ingresar un correo válido.',
+            'usuario.unique' => 'Este correo ya está registrado.',
             'password.required' => 'La contraseña es obligatoria.',
             'password.min' => 'La contraseña debe tener mínimo 6 caracteres.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
@@ -60,33 +40,30 @@ class AuthController extends Controller
             ], 422);
         }
 
-        if (!str_ends_with(strtolower($request->usuario), '@gmail.com')) {
-            return response()->json([
-                'message' => 'Solo se permiten correos Gmail.'
-            ], 422);
-        }
+        $token = Str::random(80);
 
         $usuario = UsuarioSistema::create([
             'nombre' => trim($request->nombre),
-            'usuario' => strtolower(trim($request->usuario)),
+            'usuario' => trim($request->usuario),
             'password' => $request->password,
+            'token' => $token,
             'activo' => true,
+            'ultimo_acceso' => now(),
         ]);
 
         return response()->json([
-            'message' => 'Usuario creado correctamente.',
+            'message' => 'Cuenta creada correctamente.',
+            'token' => $token,
             'usuario' => [
                 'id' => $usuario->id,
                 'nombre' => $usuario->nombre,
                 'usuario' => $usuario->usuario,
                 'activo' => $usuario->activo,
+                'ultimo_acceso' => $usuario->ultimo_acceso,
             ]
         ], 201);
     }
 
-    // =====================================================
-    // 🔐 LOGIN
-    // =====================================================
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -104,9 +81,7 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $usuarioInput = strtolower(trim($request->usuario));
-
-        $usuario = UsuarioSistema::where('usuario', $usuarioInput)->first();
+        $usuario = UsuarioSistema::where('usuario', trim($request->usuario))->first();
 
         if (!$usuario || !Hash::check($request->password, $usuario->password)) {
             return response()->json([
@@ -140,12 +115,17 @@ class AuthController extends Controller
         ]);
     }
 
-    // =====================================================
-    // 👤 USUARIO ACTUAL
-    // =====================================================
     public function me(Request $request)
     {
-        $usuario = $this->usuarioDesdeRequest($request);
+        $token = $this->obtenerToken($request);
+
+        if (!$token) {
+            return response()->json([
+                'message' => 'Token no enviado.'
+            ], 401);
+        }
+
+        $usuario = UsuarioSistema::where('token', $token)->first();
 
         if (!$usuario) {
             return response()->json([
@@ -164,22 +144,23 @@ class AuthController extends Controller
         ]);
     }
 
-    // =====================================================
-    // 🚪 CERRAR SESIÓN
-    // =====================================================
     public function logout(Request $request)
     {
-        $usuario = $this->usuarioDesdeRequest($request);
+        $token = $this->obtenerToken($request);
 
-        if (!$usuario) {
+        if (!$token) {
             return response()->json([
-                'message' => 'Sesión inválida o expirada.'
+                'message' => 'Token no enviado.'
             ], 401);
         }
 
-        $usuario->update([
-            'token' => null
-        ]);
+        $usuario = UsuarioSistema::where('token', $token)->first();
+
+        if ($usuario) {
+            $usuario->update([
+                'token' => null
+            ]);
+        }
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.'
