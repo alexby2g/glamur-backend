@@ -9,10 +9,10 @@ class Servicio extends Model
 {
     use HasFactory;
 
-    protected $table = 'servicios_glamur';
+    protected $table = 'servicios';
 
     protected $fillable = [
-        'grupo',
+        'categoria',
         'nombre',
         'descripcion',
         'precio',

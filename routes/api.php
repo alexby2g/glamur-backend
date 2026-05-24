@@ -1,13 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
-use App\Http\Controllers\AuthController;
-use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Controllers\ServicioController;
+use App\Http\Middleware\VerificarTokenSistema;
+
 /*
 |--------------------------------------------------------------------------
 | API ROUTES GLAMUR
@@ -34,6 +35,15 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
+    // 💅 SERVICIOS / COMBOS
+    // =====================================================
+    Route::get('/servicios', [ServicioController::class, 'index']);
+    Route::post('/servicios', [ServicioController::class, 'store']);
+    Route::put('/servicios/{id}', [ServicioController::class, 'update']);
+    Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
+
+
+    // =====================================================
     // 👤 CLIENTES
     // =====================================================
     Route::get('/clientes', [ClienteController::class, 'index']);
@@ -41,6 +51,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::put('/clientes/{id}', [ClienteController::class, 'update']);
     Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
 
+    // 📜 HISTORIAL DEL CLIENTE
     Route::get('/clientes/historial/buscar', [ClienteController::class, 'historial']);
 
 
@@ -76,18 +87,9 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
     Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
 
-	    // =====================================================
-	// 💅 SERVICIOS / COMBOS
-	// =====================================================
-	Route::get('/servicios', [ServicioController::class, 'index']);
-	Route::post('/servicios', [ServicioController::class, 'store']);
-	Route::put('/servicios/{id}', [ServicioController::class, 'update']);
-	Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
-
 
     // =====================================================
     // 📊 DASHBOARD
     // =====================================================
     Route::get('/dashboard', [CitaController::class, 'dashboard']);
-
 });
