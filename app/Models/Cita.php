@@ -17,11 +17,13 @@ class Cita extends Model
         'metodo_pago'
     ];
 
+    // 🔥 RELACIÓN CLIENTE
     public function cliente()
     {
         return $this->belongsTo(\App\Models\Cliente::class);
     }
 
+    // 🔥 RELACIÓN PAGOS
     public function pagos()
     {
         return $this->hasMany(\App\Models\Pago::class);

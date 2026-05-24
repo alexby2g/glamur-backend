@@ -10,7 +10,9 @@ class ClienteController extends Controller
 {
     public function index()
     {
-        return response()->json(Cliente::orderBy('created_at', 'desc')->get());
+        return response()->json(
+            Cliente::orderBy('created_at', 'desc')->get()
+        );
     }
 
     public function store(Request $request)
@@ -25,7 +27,10 @@ class ClienteController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Datos inválidos', 'errors' => $validator->errors()], 422);
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         $cliente = Cliente::create([
@@ -34,7 +39,10 @@ class ClienteController extends Controller
             'email' => $request->email,
         ]);
 
-        return response()->json(['message' => 'Cliente registrado correctamente', 'cliente' => $cliente], 201);
+        return response()->json([
+            'message' => 'Cliente registrado correctamente',
+            'cliente' => $cliente
+        ], 201);
     }
 
     public function update(Request $request, $id)
@@ -45,10 +53,16 @@ class ClienteController extends Controller
             'nombre' => 'required|string|max:255',
             'telefono' => 'nullable|string|max:30',
             'email' => 'nullable|email|max:255',
+        ], [
+            'nombre.required' => 'El nombre es obligatorio.',
+            'email.email' => 'El correo no tiene un formato válido.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Datos inválidos', 'errors' => $validator->errors()], 422);
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         $cliente->update([
@@ -57,12 +71,82 @@ class ClienteController extends Controller
             'email' => $request->email,
         ]);
 
-        return response()->json(['message' => 'Cliente actualizado correctamente', 'cliente' => $cliente]);
+        return response()->json([
+            'message' => 'Cliente actualizado correctamente',
+            'cliente' => $cliente
+        ]);
     }
 
     public function destroy($id)
     {
         Cliente::findOrFail($id)->delete();
-        return response()->json(['message' => 'Cliente eliminado correctamente']);
+
+        return response()->json([
+            'message' => 'Cliente eliminado correctamente'
+        ]);
+    }
+
+    // =====================================================
+    // 📜 HISTORIAL DEL CLIENTE
+    // Buscar por nombre o teléfono
+    // URL: /api/clientes/historial/buscar?buscar=juan
+    // =====================================================
+    public function historial(Request $request)
+    {
+        $buscar = trim($request->get('buscar', ''));
+
+        if ($buscar === '') {
+            return response()->json([
+                'message' => 'Debe ingresar un nombre o teléfono para buscar.',
+                'clientes' => []
+            ], 422);
+        }
+
+        $clientes = Cliente::with([
+                'citas' => function ($query) {
+                    $query->with('pagos')
+                        ->orderBy('fecha', 'desc')
+                        ->orderBy('hora', 'desc');
+                },
+                'pagos' => function ($query) {
+                    $query->with('cita')
+                        ->orderBy('fecha_pago', 'desc');
+                }
+            ])
+            ->where(function ($query) use ($buscar) {
+                $query->where('nombre', 'LIKE', "%{$buscar}%")
+                    ->orWhere('telefono', 'LIKE', "%{$buscar}%");
+            })
+            ->orderBy('nombre', 'asc')
+            ->get();
+
+        if ($clientes->isEmpty()) {
+            return response()->json([
+                'message' => 'No se encontraron clientes con ese nombre o teléfono.',
+                'clientes' => []
+            ], 404);
+        }
+
+        $resultado = $clientes->map(function ($cliente) {
+            return [
+                'id' => $cliente->id,
+                'nombre' => $cliente->nombre,
+                'telefono' => $cliente->telefono,
+                'email' => $cliente->email,
+
+                'total_citas' => $cliente->citas->count(),
+                'citas_pendientes' => $cliente->citas->where('estado', 'pendiente')->count(),
+                'citas_concluidas' => $cliente->citas->where('estado', 'concluida')->count(),
+
+                'total_pagado' => $cliente->pagos->sum('monto'),
+
+                'citas' => $cliente->citas,
+                'pagos' => $cliente->pagos,
+            ];
+        });
+
+        return response()->json([
+            'clientes' => $resultado
+        ]);
     }
 }
