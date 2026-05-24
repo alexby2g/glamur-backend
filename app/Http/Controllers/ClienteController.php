@@ -86,11 +86,6 @@ class ClienteController extends Controller
         ]);
     }
 
-    // =====================================================
-    // 📜 HISTORIAL DEL CLIENTE
-    // Buscar por nombre o teléfono
-    // URL: /api/clientes/historial/buscar?buscar=juan
-    // =====================================================
     public function historial(Request $request)
     {
         $buscar = trim($request->get('buscar', ''));
@@ -103,22 +98,24 @@ class ClienteController extends Controller
         }
 
         $clientes = Cliente::with([
-                'citas' => function ($query) {
-                    $query->with('pagos')
-                        ->orderBy('fecha', 'desc')
-                        ->orderBy('hora', 'desc');
-                },
-                'pagos' => function ($query) {
-                    $query->with('cita')
-                        ->orderBy('fecha_pago', 'desc');
-                }
-            ])
-            ->where(function ($query) use ($buscar) {
-                $query->where('nombre', 'LIKE', "%{$buscar}%")
-                    ->orWhere('telefono', 'LIKE', "%{$buscar}%");
-            })
-            ->orderBy('nombre', 'asc')
-            ->get();
+            'citas' => function ($query) {
+                $query->with([
+                    'pagos' => function ($pagoQuery) {
+                        $pagoQuery
+                            ->orderBy('fecha_pago', 'desc')
+                            ->orderBy('created_at', 'desc');
+                    }
+                ])
+                ->orderBy('fecha', 'desc')
+                ->orderBy('hora', 'desc');
+            }
+        ])
+        ->where(function ($query) use ($buscar) {
+            $query->where('nombre', 'LIKE', "%{$buscar}%")
+                ->orWhere('telefono', 'LIKE', "%{$buscar}%");
+        })
+        ->orderBy('nombre', 'asc')
+        ->get();
 
         if ($clientes->isEmpty()) {
             return response()->json([
@@ -128,6 +125,34 @@ class ClienteController extends Controller
         }
 
         $resultado = $clientes->map(function ($cliente) {
+            $pagos = $cliente->citas
+                ->flatMap(function ($cita) {
+                    return $cita->pagos->map(function ($pago) use ($cita) {
+                        return [
+                            'id' => $pago->id,
+                            'cita_id' => $pago->cita_id,
+                            'monto' => $pago->monto,
+                            'metodo' => $pago->metodo,
+                            'estado' => $pago->estado,
+                            'fecha_pago' => $pago->fecha_pago,
+                            'created_at' => $pago->created_at,
+                            'updated_at' => $pago->updated_at,
+
+                            'servicio' => $cita->servicio,
+                            'precio_cita' => $cita->precio,
+                            'fecha_cita' => $cita->fecha,
+                            'hora_cita' => $cita->hora,
+                            'estado_cita' => $cita->estado,
+                            'estado_pago_cita' => $cita->estado_pago,
+                            'metodo_pago_cita' => $cita->metodo_pago,
+                        ];
+                    });
+                })
+                ->sortByDesc(function ($pago) {
+                    return $pago['fecha_pago'] ?? $pago['created_at'];
+                })
+                ->values();
+
             return [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,
@@ -138,10 +163,12 @@ class ClienteController extends Controller
                 'citas_pendientes' => $cliente->citas->where('estado', 'pendiente')->count(),
                 'citas_concluidas' => $cliente->citas->where('estado', 'concluida')->count(),
 
-                'total_pagado' => $cliente->pagos->sum('monto'),
+                'total_pagado' => $pagos->sum(function ($pago) {
+                    return floatval($pago['monto'] ?? 0);
+                }),
 
                 'citas' => $cliente->citas,
-                'pagos' => $cliente->pagos,
+                'pagos' => $pagos,
             ];
         });
 
