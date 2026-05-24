@@ -9,6 +9,7 @@ use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Controllers\NotificacionController;
+use App\Http\Controllers\ReporteController;
 /*
 |--------------------------------------------------------------------------
 | API ROUTES GLAMUR
@@ -26,6 +27,8 @@ Route::post('/register', [AuthController::class, 'register']);
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
 Route::middleware([VerificarTokenSistema::class])->group(function () {
+    
+    Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
         // =====================================================
     // 🔔 NOTIFICACIONES
     // =====================================================
