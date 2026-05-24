@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
+use App\Http\Controllers\HistorialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -74,6 +75,17 @@ Route::get('/pagos/factura/{id}', [PagoController::class, 'factura']);
 // ❌ ELIMINAR
 Route::delete('/pagos/{id}', [PagoController::class, 'destroy']);
 
+// =====================
+// 🗑️ HISTORIAL / RECUPERACIÓN
+// =====================
+Route::get('/historial/eliminados', [HistorialController::class, 'index']);
+
+Route::put('/historial/clientes/{id}/restaurar', [HistorialController::class, 'restaurarCliente']);
+Route::put('/historial/citas/{id}/restaurar', [HistorialController::class, 'restaurarCita']);
+
+Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
+
+Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
 
 // =====================================================
 // 📊 DASHBOARD

@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Cita extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'cliente_id',
         'fecha',
@@ -17,13 +20,11 @@ class Cita extends Model
         'metodo_pago'
     ];
 
-    // 🔥 RELACIÓN CLIENTE
     public function cliente()
     {
-        return $this->belongsTo(\App\Models\Cliente::class);
+        return $this->belongsTo(\App\Models\Cliente::class)->withTrashed();
     }
 
-    // 🔥 RELACIÓN PAGOS
     public function pagos()
     {
         return $this->hasMany(\App\Models\Pago::class);
