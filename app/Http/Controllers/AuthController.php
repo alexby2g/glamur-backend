@@ -17,6 +17,23 @@ class AuthController extends Controller
             ?: $request->input('token');
     }
 
+    private function usuarioDesdeRequest(Request $request)
+    {
+        $usuario = $request->attributes->get('usuario_sistema');
+
+        if ($usuario) {
+            return $usuario;
+        }
+
+        $token = $this->obtenerToken($request);
+
+        if (!$token) {
+            return null;
+        }
+
+        return UsuarioSistema::where('token', $token)->first();
+    }
+
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -70,15 +87,7 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        $token = $this->obtenerToken($request);
-
-        if (!$token) {
-            return response()->json([
-                'message' => 'Token no enviado.'
-            ], 401);
-        }
-
-        $usuario = UsuarioSistema::where('token', $token)->first();
+        $usuario = $this->usuarioDesdeRequest($request);
 
         if (!$usuario) {
             return response()->json([
@@ -99,15 +108,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $token = $this->obtenerToken($request);
-
-        if (!$token) {
-            return response()->json([
-                'message' => 'Token no enviado.'
-            ], 401);
-        }
-
-        $usuario = UsuarioSistema::where('token', $token)->first();
+        $usuario = $this->usuarioDesdeRequest($request);
 
         if (!$usuario) {
             return response()->json([
