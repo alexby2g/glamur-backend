@@ -96,10 +96,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/me', [AuthController::class, 'me']);
 Route::post('/logout', [AuthController::class, 'logout']);
 
-// =====================
-// ⚙️ SETUP TEMPORAL
-// =====================
-Route::get('/setup-admin', [SetupController::class, 'instalar']);
+
 
 // =====================================================
 // 📊 DASHBOARD
