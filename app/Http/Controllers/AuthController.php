@@ -17,20 +17,32 @@ class AuthController extends Controller
             ?: $request->input('token');
     }
 
+    // =====================================================
+    // 🔐 REGISTRO SEGURO DE ADMINISTRADOR
+    // =====================================================
     public function register(Request $request)
     {
+        $codigoSistema = env('ADMIN_REGISTER_CODE');
+
+        if (!$codigoSistema) {
+            return response()->json([
+                'message' => 'El registro está desactivado. Falta configurar el código de seguridad del sistema.'
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:255',
             'usuario' => 'required|email|max:255|unique:usuario_sistemas,usuario',
-            'password' => 'required|string|min:6|confirmed',
+            'password' => 'required|string|min:6',
+            'codigo_registro' => 'required|string',
         ], [
-            'nombre.required' => 'El nombre completo es obligatorio.',
-            'usuario.required' => 'El correo Gmail es obligatorio.',
+            'nombre.required' => 'El nombre es obligatorio.',
+            'usuario.required' => 'El correo es obligatorio.',
             'usuario.email' => 'Debe ingresar un correo válido.',
             'usuario.unique' => 'Este correo ya está registrado.',
             'password.required' => 'La contraseña es obligatoria.',
             'password.min' => 'La contraseña debe tener mínimo 6 caracteres.',
-            'password.confirmed' => 'Las contraseñas no coinciden.',
+            'codigo_registro.required' => 'El código de seguridad es obligatorio.',
         ]);
 
         if ($validator->fails()) {
@@ -40,11 +52,17 @@ class AuthController extends Controller
             ], 422);
         }
 
+        if (!hash_equals($codigoSistema, $request->codigo_registro)) {
+            return response()->json([
+                'message' => 'Código de seguridad incorrecto. No puedes crear una cuenta de administrador.'
+            ], 403);
+        }
+
         $token = Str::random(80);
 
         $usuario = UsuarioSistema::create([
             'nombre' => trim($request->nombre),
-            'usuario' => trim($request->usuario),
+            'usuario' => strtolower(trim($request->usuario)),
             'password' => $request->password,
             'token' => $token,
             'activo' => true,
@@ -52,7 +70,7 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Cuenta creada correctamente.',
+            'message' => 'Administrador registrado correctamente.',
             'token' => $token,
             'usuario' => [
                 'id' => $usuario->id,
@@ -64,6 +82,9 @@ class AuthController extends Controller
         ], 201);
     }
 
+    // =====================================================
+    // 🔐 LOGIN
+    // =====================================================
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -81,7 +102,9 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $usuario = UsuarioSistema::where('usuario', trim($request->usuario))->first();
+        $usuarioInput = strtolower(trim($request->usuario));
+
+        $usuario = UsuarioSistema::where('usuario', $usuarioInput)->first();
 
         if (!$usuario || !Hash::check($request->password, $usuario->password)) {
             return response()->json([
@@ -115,6 +138,9 @@ class AuthController extends Controller
         ]);
     }
 
+    // =====================================================
+    // 👤 USUARIO ACTUAL
+    // =====================================================
     public function me(Request $request)
     {
         $token = $this->obtenerToken($request);
@@ -144,6 +170,9 @@ class AuthController extends Controller
         ]);
     }
 
+    // =====================================================
+    // 🚪 CERRAR SESIÓN
+    // =====================================================
     public function logout(Request $request)
     {
         $token = $this->obtenerToken($request);
@@ -156,11 +185,15 @@ class AuthController extends Controller
 
         $usuario = UsuarioSistema::where('token', $token)->first();
 
-        if ($usuario) {
-            $usuario->update([
-                'token' => null
-            ]);
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión inválida o expirada.'
+            ], 401);
         }
+
+        $usuario->update([
+            'token' => null
+        ]);
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.'

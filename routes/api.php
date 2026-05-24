@@ -7,9 +7,10 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\ServicioController;
-use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Middleware\VerificarTokenSistema;
+
 /*
 |--------------------------------------------------------------------------
 | API ROUTES GLAMUR
@@ -19,6 +20,8 @@ use App\Http\Controllers\ReporteController;
 // =====================================================
 // 🔐 AUTENTICACIÓN PÚBLICA
 // =====================================================
+// Estas rutas son públicas porque sirven para entrar o registrarse.
+// El registro queda protegido por el código secreto en AuthController.
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
@@ -27,15 +30,6 @@ Route::post('/register', [AuthController::class, 'register']);
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
 Route::middleware([VerificarTokenSistema::class])->group(function () {
-    
-    Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
-        // =====================================================
-    // 🔔 NOTIFICACIONES
-    // =====================================================
-    Route::get('/notificaciones', [NotificacionController::class, 'index']);
-    Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'marcarTodasLeidas']);
-    Route::put('/notificaciones/{id}/leer', [NotificacionController::class, 'marcarLeida']);
-    Route::delete('/notificaciones/limpiar', [NotificacionController::class, 'limpiar']);
 
     // =====================================================
     // 🔐 SESIÓN
@@ -45,13 +39,9 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
-    // 💅 SERVICIOS / COMBOS
+    // 📊 DASHBOARD
     // =====================================================
-    Route::get('/servicios', [ServicioController::class, 'index']);
-    Route::post('/servicios/cargar-base', [ServicioController::class, 'cargarBase']);
-    Route::post('/servicios', [ServicioController::class, 'store']);
-    Route::put('/servicios/{id}', [ServicioController::class, 'update']);
-    Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
+    Route::get('/dashboard', [CitaController::class, 'dashboard']);
 
 
     // =====================================================
@@ -86,6 +76,25 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
+    // 💅 SERVICIOS / COMBOS
+    // =====================================================
+    Route::get('/servicios', [ServicioController::class, 'index']);
+    Route::post('/servicios/cargar-base', [ServicioController::class, 'cargarBase']);
+    Route::post('/servicios', [ServicioController::class, 'store']);
+    Route::put('/servicios/{id}', [ServicioController::class, 'update']);
+    Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
+
+
+    // =====================================================
+    // 🔔 NOTIFICACIONES
+    // =====================================================
+    Route::get('/notificaciones', [NotificacionController::class, 'index']);
+    Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'marcarTodasLeidas']);
+    Route::put('/notificaciones/{id}/leer', [NotificacionController::class, 'marcarLeida']);
+    Route::delete('/notificaciones/limpiar', [NotificacionController::class, 'limpiar']);
+
+
+    // =====================================================
     // 🗑️ HISTORIAL / RECUPERACIÓN
     // =====================================================
     Route::get('/historial/eliminados', [HistorialController::class, 'index']);
@@ -99,8 +108,8 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
-    // 📊 DASHBOARD
+    // 📄 REPORTES PDF
     // =====================================================
-    Route::get('/dashboard', [CitaController::class, 'dashboard']);
+    Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
 
 });
