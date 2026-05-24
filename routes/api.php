@@ -7,7 +7,7 @@ use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\AuthController;
 use App\Http\Middleware\VerificarTokenSistema;
-
+use App\Http\Controllers\ServicioController;
 /*
 |--------------------------------------------------------------------------
 | API ROUTES GLAMUR
@@ -75,6 +75,14 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
 
     Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
+
+	    // =====================================================
+	// 💅 SERVICIOS / COMBOS
+	// =====================================================
+	Route::get('/servicios', [ServicioController::class, 'index']);
+	Route::post('/servicios', [ServicioController::class, 'store']);
+	Route::put('/servicios/{id}', [ServicioController::class, 'update']);
+	Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
 
 
     // =====================================================
