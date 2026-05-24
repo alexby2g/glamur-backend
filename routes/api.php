@@ -5,6 +5,7 @@ use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\HistorialController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +87,13 @@ Route::put('/historial/citas/{id}/restaurar', [HistorialController::class, 'rest
 Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
 
 Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
+
+// =====================
+// 🔐 AUTENTICACIÓN
+// =====================
+Route::post('/login', [AuthController::class, 'login']);
+Route::get('/me', [AuthController::class, 'me']);
+Route::post('/logout', [AuthController::class, 'logout']);
 
 // =====================================================
 // 📊 DASHBOARD
