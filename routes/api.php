@@ -101,6 +101,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
     Route::put('/historial/clientes/{id}/restaurar', [HistorialController::class, 'restaurarCliente']);
     Route::put('/historial/citas/{id}/restaurar', [HistorialController::class, 'restaurarCita']);
+    Route::put('/historial/pagos/{id}/restaurar', [HistorialController::class, 'restaurarPago']);
 
     Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
 

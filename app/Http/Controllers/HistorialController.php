@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use App\Models\Cita;
 use App\Models\Pago;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class HistorialController extends Controller
@@ -35,9 +34,23 @@ class HistorialController extends Controller
             ->orderBy('deleted_at', 'desc')
             ->get();
 
+        $pagosEliminados = Pago::onlyTrashed()
+            ->with([
+                'cita' => function ($query) {
+                    $query->withTrashed()->with([
+                        'cliente' => function ($clienteQuery) {
+                            $clienteQuery->withTrashed();
+                        }
+                    ]);
+                }
+            ])
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
         return response()->json([
             'clientes_eliminados' => $clientesEliminados,
             'citas_eliminadas' => $citasEliminadas,
+            'pagos_eliminados' => $pagosEliminados,
         ]);
     }
 
@@ -93,6 +106,10 @@ class HistorialController extends Controller
 
             $cita->restore();
 
+            Pago::onlyTrashed()
+                ->where('cita_id', $cita->id)
+                ->restore();
+
             DB::commit();
 
             return response()->json([
@@ -110,6 +127,47 @@ class HistorialController extends Controller
     }
 
     // =====================================================
+    // ♻️ RESTAURAR PAGO ELIMINADO
+    // URL: PUT /api/historial/pagos/{id}/restaurar
+    // =====================================================
+    public function restaurarPago($id)
+    {
+        DB::beginTransaction();
+
+        try {
+            $pago = Pago::onlyTrashed()->findOrFail($id);
+
+            $cita = Cita::withTrashed()->find($pago->cita_id);
+
+            if ($cita && $cita->trashed()) {
+                $cliente = Cliente::withTrashed()->find($cita->cliente_id);
+
+                if ($cliente && $cliente->trashed()) {
+                    $cliente->restore();
+                }
+
+                $cita->restore();
+            }
+
+            $pago->restore();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Pago recuperado correctamente.',
+                'pago' => $pago
+            ]);
+        } catch (\Throwable $error) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'No se pudo recuperar el pago.',
+                'error' => $error->getMessage()
+            ], 500);
+        }
+    }
+
+    // =====================================================
     // ♻️ RESTAURAR TODO EL HISTORIAL
     // URL: PUT /api/historial/restaurar-todo
     // =====================================================
@@ -120,6 +178,7 @@ class HistorialController extends Controller
         try {
             Cliente::onlyTrashed()->restore();
             Cita::onlyTrashed()->restore();
+            Pago::onlyTrashed()->restore();
 
             DB::commit();
 
@@ -148,7 +207,9 @@ class HistorialController extends Controller
             $citasEliminadas = Cita::onlyTrashed()->get();
 
             foreach ($citasEliminadas as $cita) {
-                Pago::where('cita_id', $cita->id)->delete();
+                Pago::withTrashed()
+                    ->where('cita_id', $cita->id)
+                    ->forceDelete();
 
                 $cita->forceDelete();
             }
@@ -158,6 +219,8 @@ class HistorialController extends Controller
             foreach ($clientesEliminados as $cliente) {
                 $cliente->forceDelete();
             }
+
+            Pago::onlyTrashed()->forceDelete();
 
             DB::commit();
 

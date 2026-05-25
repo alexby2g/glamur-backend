@@ -2,30 +2,38 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Cita;
-use App\Models\Cliente;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Pago extends Model
 {
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'pagos';
+
     protected $fillable = [
-        'cliente_id',
         'cita_id',
+        'cliente_id',
         'monto',
         'metodo',
         'estado',
-        'fecha_pago'
+        'fecha_pago',
     ];
 
-    // 🔥 RELACIÓN CITA
+    protected $casts = [
+        'monto' => 'decimal:2',
+        'fecha_pago' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
     public function cita()
     {
-        return $this->belongsTo(Cita::class);
+        return $this->belongsTo(Cita::class)->withTrashed();
     }
 
-    // 🔥 RELACIÓN CLIENTE
     public function cliente()
     {
-        return $this->belongsTo(Cliente::class);
+        return $this->belongsTo(Cliente::class)->withTrashed();
     }
 }
