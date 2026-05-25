@@ -24,16 +24,15 @@ class Pago extends Model
     protected $casts = [
         'monto' => 'decimal:2',
         'fecha_pago' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
     public function cita()
     {
-        return $this->belongsTo(Cita::class)->withTrashed();
+        return $this->belongsTo(Cita::class);
     }
 
     public function cliente()
     {
-        return $this->belongsTo(Cliente::class)->withTrashed();
+        return $this->belongsTo(Cliente::class);
     }
 }
