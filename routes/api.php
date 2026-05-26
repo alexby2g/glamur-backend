@@ -94,7 +94,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::delete('/notificaciones/limpiar', [NotificacionController::class, 'limpiar']);
 
 
-    // =====================================================
+        // =====================================================
     // 🗑️ HISTORIAL / RECUPERACIÓN
     // =====================================================
     Route::get('/historial/eliminados', [HistorialController::class, 'index']);
@@ -105,12 +105,17 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
     Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
 
+    // Eliminar definitivamente por separado
+    Route::delete('/historial/clientes/{id}/eliminar', [HistorialController::class, 'eliminarClienteDefinitivo']);
+    Route::delete('/historial/citas/{id}/eliminar', [HistorialController::class, 'eliminarCitaDefinitiva']);
+    Route::delete('/historial/pagos/{id}/eliminar', [HistorialController::class, 'eliminarPagoDefinitivo']);
+
+    // Limpiar todo el historial
     Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
 
+        // =====================================================
+        // 📄 REPORTES PDF
+        // =====================================================
+        Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
 
-    // =====================================================
-    // 📄 REPORTES PDF
-    // =====================================================
-    Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
-
-});
+    });
