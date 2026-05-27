@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cita;
+use App\Models\Cliente;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -119,14 +121,133 @@ class CitaController extends Controller
 
     public function dashboard()
     {
+        $hoy = Carbon::now();
+        $inicioMes = $hoy->copy()->startOfMonth();
+        $finMes = $hoy->copy()->endOfMonth();
+        $inicioAnio = $hoy->copy()->startOfYear();
+        $finAnio = $hoy->copy()->endOfYear();
+
+        $sumarIngresos = function ($citas) {
+            return (float) $citas
+                ->where('estado_pago', 'pagado')
+                ->sum('precio');
+        };
+
+        $citasMes = Cita::whereBetween('fecha', [
+            $inicioMes->toDateString(),
+            $finMes->toDateString(),
+        ])->get();
+
+        $citasPorDia = $citasMes->groupBy(function ($cita) {
+            return Carbon::parse($cita->fecha)->format('Y-m-d');
+        });
+
+        $estadisticasDias = [];
+
+        for ($fecha = $inicioMes->copy(); $fecha->lte($finMes); $fecha->addDay()) {
+            $clave = $fecha->format('Y-m-d');
+            $grupo = $citasPorDia->get($clave, collect());
+
+            $estadisticasDias[] = [
+                'fecha' => $clave,
+                'label' => $fecha->format('d/m'),
+                'citas' => $grupo->count(),
+                'ingresos' => $sumarIngresos($grupo),
+            ];
+        }
+
+        $meses = [
+            1 => 'Ene',
+            2 => 'Feb',
+            3 => 'Mar',
+            4 => 'Abr',
+            5 => 'May',
+            6 => 'Jun',
+            7 => 'Jul',
+            8 => 'Ago',
+            9 => 'Sep',
+            10 => 'Oct',
+            11 => 'Nov',
+            12 => 'Dic',
+        ];
+
+        $citasAnio = Cita::whereBetween('fecha', [
+            $inicioAnio->toDateString(),
+            $finAnio->toDateString(),
+        ])->get();
+
+        $citasPorMes = $citasAnio->groupBy(function ($cita) {
+            return (int) Carbon::parse($cita->fecha)->format('m');
+        });
+
+        $estadisticasMeses = [];
+
+        foreach ($meses as $numeroMes => $nombreMes) {
+            $grupo = $citasPorMes->get($numeroMes, collect());
+
+            $estadisticasMeses[] = [
+                'mes' => $numeroMes,
+                'label' => $nombreMes,
+                'citas' => $grupo->count(),
+                'ingresos' => $sumarIngresos($grupo),
+            ];
+        }
+
+        $serviciosTop = Cita::all()
+            ->groupBy(function ($cita) {
+                return $cita->servicio ?: 'Sin servicio';
+            })
+            ->map(function ($grupo, $servicio) use ($sumarIngresos) {
+                return [
+                    'servicio' => $servicio,
+                    'cantidad' => $grupo->count(),
+                    'ingresos' => $sumarIngresos($grupo),
+                ];
+            })
+            ->sortByDesc('cantidad')
+            ->values()
+            ->take(5);
+
+        $ultimasCitas = Cita::with('cliente')
+            ->orderBy('fecha', 'desc')
+            ->orderBy('hora', 'desc')
+            ->take(5)
+            ->get();
+
         return response()->json([
             'total' => Cita::count(),
+            'citas_hoy' => Cita::whereDate('fecha', $hoy->toDateString())->count(),
+            'citas_mes' => $citasMes->count(),
+            'citas_anio' => $citasAnio->count(),
+
             'pendientes' => Cita::where('estado', 'pendiente')->count(),
             'concluidas' => Cita::where('estado', 'concluida')->count(),
             'canceladas' => Cita::where('estado', 'cancelada')->count(),
-            'ingreso_dia' => Cita::whereDate('fecha', now())->where('estado_pago', 'pagado')->sum('precio'),
-            'ingreso_mes' => Cita::whereMonth('fecha', now()->month)->whereYear('fecha', now()->year)->where('estado_pago', 'pagado')->sum('precio'),
-            'ingreso_anio' => Cita::whereYear('fecha', now()->year)->where('estado_pago', 'pagado')->sum('precio'),
+
+            'clientes_total' => Cliente::count(),
+
+            'ingreso_dia' => Cita::whereDate('fecha', $hoy->toDateString())
+                ->where('estado_pago', 'pagado')
+                ->sum('precio'),
+
+            'ingreso_mes' => Cita::whereBetween('fecha', [
+                $inicioMes->toDateString(),
+                $finMes->toDateString(),
+            ])
+                ->where('estado_pago', 'pagado')
+                ->sum('precio'),
+
+            'ingreso_anio' => Cita::whereBetween('fecha', [
+                $inicioAnio->toDateString(),
+                $finAnio->toDateString(),
+            ])
+                ->where('estado_pago', 'pagado')
+                ->sum('precio'),
+
+            'estadisticas_dias' => $estadisticasDias,
+            'estadisticas_meses' => $estadisticasMeses,
+            'servicios_top' => $serviciosTop,
+            'ultimas_citas' => $ultimasCitas,
         ]);
     }
 }
