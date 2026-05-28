@@ -23,8 +23,6 @@ use App\Http\Middleware\VerificarRolSistema;
 // =====================================================
 // 🔐 AUTENTICACIÓN PÚBLICA
 // =====================================================
-// Estas rutas son públicas porque sirven para entrar o registrarse.
-// El registro queda protegido por el código secreto en AuthController.
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']);
@@ -38,7 +36,6 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // =====================================================
     // 🔐 SESIÓN
     // =====================================================
-    // Admin y empleado pueden consultar su sesión y cerrar sesión.
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -46,15 +43,12 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // =====================================================
     // ⚙️ CONFIGURACIÓN BÁSICA DEL NEGOCIO
     // =====================================================
-    // GET se deja disponible para admin y empleado porque el frontend usa
-    // esta información para mostrar nombre, logo y datos del negocio.
     Route::get('/configuracion', [ConfiguracionController::class, 'index']);
 
 
     // =====================================================
     // 🔔 NOTIFICACIONES
     // =====================================================
-    // Se mantienen disponibles para usuarios con sesión.
     Route::get('/notificaciones', [NotificacionController::class, 'index']);
     Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'marcarTodasLeidas']);
     Route::put('/notificaciones/{id}/leer', [NotificacionController::class, 'marcarLeida']);
@@ -63,8 +57,6 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // =====================================================
     // 👩‍💼 CONSULTAS BÁSICAS PARA USUARIOS AUTENTICADOS
     // =====================================================
-    // Estas rutas pueden servir para llenar selectores o mostrar información.
-    // Las acciones fuertes quedan abajo solo para admin.
     Route::get('/empleados/activos', [EmpleadoController::class, 'activos']);
     Route::get('/servicios', [ServicioController::class, 'index']);
 
@@ -171,18 +163,18 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
         Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
         Route::get('/reportes/caja-diaria', [ReporteController::class, 'cajaDiaria']);
         Route::get('/reportes/empleados', [ReporteController::class, 'empleados']);
-
     });
 
 
     // =====================================================
-    // 👩‍💼 RUTAS PARA EMPLEADO
+    // 👩‍💼 RUTAS SOLO EMPLEADO
     // =====================================================
-    // Aquí después agregaremos rutas limitadas como:
-    // /mis-citas
-    // /mi-reporte
-    // /mi-calendario
-    //
-    // Por ahora no las activamos todavía para no romper controladores
-    // que aún devuelven datos generales.
+    Route::middleware([VerificarRolSistema::class . ':empleado'])->group(function () {
+
+        // El empleado solo ve sus propias citas asignadas
+        Route::get('/empleado/mis-citas', [CitaController::class, 'misCitasEmpleado']);
+
+        // El empleado solo puede finalizar sus propias citas
+        Route::put('/empleado/mis-citas/{id}/finalizar', [CitaController::class, 'finalizarMiCitaEmpleado']);
+    });
 });

@@ -177,6 +177,124 @@ class CitaController extends Controller
         ]);
     }
 
+    // =====================================================
+    // 👤 PANEL EMPLEADO - MIS CITAS
+    // =====================================================
+    public function misCitasEmpleado(Request $request)
+    {
+        $usuario = $request->attributes->get('usuario_sistema');
+
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión no válida.',
+            ], 401);
+        }
+
+        if (($usuario->rol ?? null) !== 'empleado') {
+            return response()->json([
+                'message' => 'Esta sección es solo para empleados.',
+            ], 403);
+        }
+
+        if (!$usuario->empleado_id) {
+            return response()->json([
+                'message' => 'Tu usuario no está vinculado a un empleado.',
+            ], 403);
+        }
+
+        $query = Cita::with(['cliente', 'empleado'])
+            ->where('empleado_id', $usuario->empleado_id);
+
+        if ($request->filled('estado') && $request->estado !== 'todos') {
+            $query->where('estado', $request->estado);
+        }
+
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha', $request->fecha);
+        }
+
+        if ($request->filled('desde')) {
+            $query->whereDate('fecha', '>=', $request->desde);
+        }
+
+        if ($request->filled('hasta')) {
+            $query->whereDate('fecha', '<=', $request->hasta);
+        }
+
+        $citas = $query
+            ->orderBy('fecha', 'desc')
+            ->orderBy('hora', 'desc')
+            ->get();
+
+        $total = $citas->count();
+        $pendientes = $citas->where('estado', 'pendiente')->count();
+        $concluidas = $citas->where('estado', 'concluida')->count();
+        $canceladas = $citas->where('estado', 'cancelada')->count();
+
+        $totalGenerado = (float) $citas
+            ->where('estado', 'concluida')
+            ->sum('precio');
+
+        $totalPagado = (float) $citas
+            ->where('estado_pago', 'pagado')
+            ->sum('precio');
+
+        return response()->json([
+            'empleado_id' => $usuario->empleado_id,
+            'resumen' => [
+                'total' => $total,
+                'pendientes' => $pendientes,
+                'concluidas' => $concluidas,
+                'canceladas' => $canceladas,
+                'total_generado' => $totalGenerado,
+                'total_pagado' => $totalPagado,
+            ],
+            'citas' => $citas,
+        ]);
+    }
+
+    public function finalizarMiCitaEmpleado(Request $request, $id)
+    {
+        $usuario = $request->attributes->get('usuario_sistema');
+
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión no válida.',
+            ], 401);
+        }
+
+        if (($usuario->rol ?? null) !== 'empleado') {
+            return response()->json([
+                'message' => 'Esta acción es solo para empleados.',
+            ], 403);
+        }
+
+        if (!$usuario->empleado_id) {
+            return response()->json([
+                'message' => 'Tu usuario no está vinculado a un empleado.',
+            ], 403);
+        }
+
+        $cita = Cita::with(['cliente', 'empleado'])
+            ->where('empleado_id', $usuario->empleado_id)
+            ->findOrFail($id);
+
+        if ($cita->estado === 'cancelada') {
+            return response()->json([
+                'message' => 'No se puede finalizar una cita cancelada.',
+            ], 422);
+        }
+
+        $cita->update([
+            'estado' => 'concluida',
+        ]);
+
+        return response()->json([
+            'message' => 'Cita finalizada correctamente.',
+            'cita' => $cita->fresh(['cliente', 'empleado']),
+        ]);
+    }
+
     public function dashboard()
     {
         $hoy = Carbon::now();
