@@ -30,19 +30,21 @@
         };
     };
 
-    $nombreCliente = function ($cita) {
-        return $cita->cliente->nombre ?? 'Cliente no registrado';
+    $estadoPagoTexto = function ($estado) {
+        return match ($estado) {
+            'pagado' => 'Pagado',
+            default => 'Pendiente',
+        };
     };
 
-    $telefonoCliente = function ($cita) {
-        return $cita->cliente->telefono ?? '-';
+    $estadoPagoClase = function ($estado) {
+        return match ($estado) {
+            'pagado' => 'estado-concluida',
+            default => 'estado-pendiente',
+        };
     };
 
-    $servicioCita = function ($cita) {
-        return $cita->servicio ?? 'Sin servicio';
-    };
-
-    $horaCita = function ($hora) {
+    $horaSimple = function ($hora) {
         if (!$hora) {
             return '-';
         }
@@ -54,7 +56,7 @@
         }
     };
 
-    $fechaCita = function ($fecha) {
+    $fechaSimple = function ($fecha) {
         if (!$fecha) {
             return '-';
         }
@@ -65,13 +67,15 @@
             return $fecha;
         }
     };
+
+    $inicialLogo = strtoupper(substr(trim($nombreCorto ?: 'A'), 0, 1));
 @endphp
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>{{ $titulo ?? 'Extracto mensual' }}</title>
+    <title>{{ $titulo ?? 'Caja diaria' }}</title>
 
     <style>
         * {
@@ -124,7 +128,7 @@
             text-align: center;
             line-height: 78px;
             color: #ffffff;
-            font-size: 26px;
+            font-size: 28px;
             font-weight: bold;
             display: inline-block;
             overflow: hidden;
@@ -174,13 +178,14 @@
         .report-subtitle {
             font-size: 12px;
             color: #6a536d;
+            line-height: 1.5;
         }
 
         .summary-grid {
             width: 100%;
             border-collapse: separate;
             border-spacing: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .summary-card {
@@ -281,6 +286,11 @@
             background: #c62828;
         }
 
+        .method-name {
+            font-weight: bold;
+            color: #c2185b;
+        }
+
         .empty-box {
             padding: 22px;
             border-radius: 14px;
@@ -289,6 +299,17 @@
             text-align: center;
             border: 1px dashed #cccccc;
             margin-bottom: 14px;
+        }
+
+        .note-box {
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 14px;
+            background: #fff7fb;
+            border: 1px solid #f8bbd0;
+            color: #6a536d;
+            font-size: 10px;
+            line-height: 1.5;
         }
 
         .footer {
@@ -302,15 +323,6 @@
 
         .footer strong {
             color: #c2185b;
-        }
-
-        .small {
-            font-size: 9px;
-            color: #777777;
-        }
-
-        .page-break {
-            page-break-before: always;
         }
     </style>
 </head>
@@ -346,7 +358,7 @@
                         <img src="{{ $logoNegocio }}" class="logo-img" alt="Logo">
                     @else
                         <div class="logo-box">
-                            {{ mb_substr($nombreCorto, 0, 1) }}
+                            {{ $inicialLogo }}
                         </div>
                     @endif
                 </td>
@@ -354,16 +366,15 @@
         </table>
     </div>
 
-    <!-- TÍTULO REPORTE -->
+    <!-- TÍTULO -->
     <div class="title-box">
         <div class="report-title">
-            {{ $titulo ?? 'Extracto mensual' }}
+            {{ $titulo ?? 'Caja diaria' }}
         </div>
 
         <div class="report-subtitle">
-            Periodo: {{ $mes_nombre ?? '' }} {{ $anio ?? '' }}
-            · Desde {{ $fecha_inicio ?? '-' }} hasta {{ $fecha_fin ?? '-' }}
-            · Generado: {{ $fecha_generado ?? '-' }}
+            Fecha de caja: {{ $fecha_texto ?? ($fecha ?? '-') }}<br>
+            Generado: {{ $fecha_generado ?? '-' }}
         </div>
     </div>
 
@@ -371,28 +382,30 @@
     <table class="summary-grid">
         <tr>
             <td class="summary-card">
-                <div class="summary-label">Total de citas</div>
-                <div class="summary-value">{{ $total_citas ?? 0 }}</div>
-            </td>
-
-            <td class="summary-card">
-                <div class="summary-label">Total estimado</div>
+                <div class="summary-label">Total cobrado</div>
                 <div class="summary-value summary-money">
-                    {{ $total_estimado_texto ?? $formatoDinero($total_estimado ?? 0) }}
+                    {{ $total_cobrado_texto ?? $formatoDinero($total_cobrado ?? 0) }}
                 </div>
             </td>
 
             <td class="summary-card">
-                <div class="summary-label">Total pagado</div>
-                <div class="summary-value summary-money">
-                    {{ $total_pagado_texto ?? $formatoDinero($total_pagado ?? 0) }}
+                <div class="summary-label">Cantidad de pagos</div>
+                <div class="summary-value">
+                    {{ $cantidad_pagos ?? 0 }}
                 </div>
             </td>
 
             <td class="summary-card">
-                <div class="summary-label">Total pendiente</div>
-                <div class="summary-value summary-warning">
-                    {{ $total_pendiente_texto ?? $formatoDinero($total_pendiente ?? 0) }}
+                <div class="summary-label">Ticket promedio</div>
+                <div class="summary-value summary-money">
+                    {{ $ticket_promedio_texto ?? $formatoDinero($ticket_promedio ?? 0) }}
+                </div>
+            </td>
+
+            <td class="summary-card">
+                <div class="summary-label">Moneda</div>
+                <div class="summary-value">
+                    {{ $moneda }}
                 </div>
             </td>
         </tr>
@@ -401,123 +414,166 @@
     <table class="summary-grid">
         <tr>
             <td class="summary-card">
-                <div class="summary-label">Citas pendientes</div>
-                <div class="summary-value summary-warning">{{ $citas_pendientes ?? 0 }}</div>
+                <div class="summary-label">Citas del día</div>
+                <div class="summary-value">{{ $citas_dia ?? 0 }}</div>
             </td>
 
             <td class="summary-card">
-                <div class="summary-label">Citas concluidas</div>
-                <div class="summary-value summary-money">{{ $citas_concluidas ?? 0 }}</div>
+                <div class="summary-label">Citas pagadas</div>
+                <div class="summary-value summary-money">{{ $citas_pagadas ?? 0 }}</div>
             </td>
 
             <td class="summary-card">
-                <div class="summary-label">Citas canceladas</div>
+                <div class="summary-label">Pendientes de pago</div>
+                <div class="summary-value summary-warning">{{ $citas_pendientes_pago ?? 0 }}</div>
+            </td>
+
+            <td class="summary-card">
+                <div class="summary-label">Canceladas</div>
                 <div class="summary-value summary-danger">{{ $citas_canceladas ?? 0 }}</div>
-            </td>
-
-            <td class="summary-card">
-                <div class="summary-label">Moneda</div>
-                <div class="summary-value">{{ $moneda }}</div>
             </td>
         </tr>
     </table>
 
-    <!-- RESUMEN POR DÍA -->
-    <div class="section-title">Resumen por día</div>
+    <!-- RESUMEN POR MÉTODO -->
+    <div class="section-title">Resumen por método de pago</div>
 
-    @if(!empty($resumenDias) && count($resumenDias) > 0)
+    @if(!empty($metodos) && count($metodos) > 0)
         <table class="data-table">
             <thead>
             <tr>
-                <th>Día</th>
-                <th class="text-center">Citas</th>
-                <th class="text-center">Pend.</th>
-                <th class="text-center">Concl.</th>
-                <th class="text-center">Canc.</th>
-                <th class="text-right">Estimado</th>
+                <th>Método</th>
+                <th class="text-center">Cantidad</th>
+                <th class="text-right">Total</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            @foreach($metodos as $clave => $metodo)
+                <tr>
+                    <td class="method-name">{{ $metodo['label'] ?? ucfirst($clave) }}</td>
+                    <td class="text-center">{{ $metodo['cantidad'] ?? 0 }}</td>
+                    <td class="text-right">
+                        {{ $metodo['total_texto'] ?? $formatoDinero($metodo['total'] ?? 0) }}
+                    </td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+    @else
+        <div class="empty-box">
+            No hay métodos de pago registrados para esta fecha.
+        </div>
+    @endif
+
+    <!-- DETALLE DE PAGOS -->
+    <div class="section-title">Detalle de pagos recibidos</div>
+
+    @if(!empty($pagos) && count($pagos) > 0)
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Hora</th>
+                <th>Cliente</th>
+                <th>Servicio</th>
+                <th>Método</th>
+                <th class="text-right">Monto</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            @foreach($pagos as $pago)
+                <tr>
+                    <td>{{ $pago['hora_pago'] ?? '-' }}</td>
+                    <td>
+                        {{ $pago['cliente'] ?? 'Cliente no registrado' }}
+                        @if(!empty($pago['telefono']))
+                            <br><span style="color:#777777;">{{ $pago['telefono'] }}</span>
+                        @endif
+                    </td>
+                    <td>{{ $pago['servicio'] ?? 'Sin servicio' }}</td>
+                    <td>{{ $pago['metodo'] ?? '-' }}</td>
+                    <td class="text-right">
+                        {{ $pago['monto_texto'] ?? $formatoDinero($pago['monto'] ?? 0) }}
+                    </td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+    @else
+        <div class="empty-box">
+            No hay pagos recibidos para esta fecha.
+        </div>
+    @endif
+
+    <!-- DETALLE DE CITAS -->
+    <div class="section-title">Detalle de citas del día</div>
+
+    @if(!empty($citas) && count($citas) > 0)
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Hora</th>
+                <th>Cliente</th>
+                <th>Servicio</th>
+                <th>Estado cita</th>
+                <th>Estado pago</th>
+                <th class="text-right">Precio</th>
                 <th class="text-right">Pagado</th>
                 <th class="text-right">Pendiente</th>
             </tr>
             </thead>
 
             <tbody>
-            @foreach($resumenDias as $dia)
-                <tr>
-                    <td>{{ ucfirst($dia['dia'] ?? '') }}</td>
-                    <td class="text-center">{{ $dia['total_citas'] ?? 0 }}</td>
-                    <td class="text-center">{{ $dia['pendientes'] ?? 0 }}</td>
-                    <td class="text-center">{{ $dia['concluidas'] ?? 0 }}</td>
-                    <td class="text-center">{{ $dia['canceladas'] ?? 0 }}</td>
-                    <td class="text-right">
-                        {{ $dia['total_estimado_texto'] ?? $formatoDinero($dia['total_estimado'] ?? 0) }}
-                    </td>
-                    <td class="text-right">
-                        {{ $dia['total_pagado_texto'] ?? $formatoDinero($dia['total_pagado'] ?? 0) }}
-                    </td>
-                    <td class="text-right">
-                        {{ $dia['total_pendiente_texto'] ?? $formatoDinero($dia['total_pendiente'] ?? 0) }}
-                    </td>
-                </tr>
-            @endforeach
-            </tbody>
-        </table>
-    @else
-        <div class="empty-box">
-            No hay movimientos diarios para este mes.
-        </div>
-    @endif
-
-    <!-- DETALLE DE CITAS -->
-    <div class="section-title">Detalle de citas del mes</div>
-
-    @if(isset($citas) && $citas->count() > 0)
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Hora</th>
-                <th>Cliente</th>
-                <th>Teléfono</th>
-                <th>Servicio</th>
-                <th>Estado</th>
-                <th class="text-right">Precio</th>
-                <th class="text-right">Pagado</th>
-            </tr>
-            </thead>
-
-            <tbody>
             @foreach($citas as $cita)
-                @php
-                    $totalPagadoCita = $cita->pagos ? $cita->pagos->sum('monto') : 0;
-                @endphp
-
                 <tr>
-                    <td>{{ $fechaCita($cita->fecha ?? null) }}</td>
-                    <td>{{ $horaCita($cita->hora ?? null) }}</td>
-                    <td>{{ $nombreCliente($cita) }}</td>
-                    <td>{{ $telefonoCliente($cita) }}</td>
-                    <td>{{ $servicioCita($cita) }}</td>
+                    <td>{{ $horaSimple($cita['hora'] ?? null) }}</td>
                     <td>
-                        <span class="badge {{ $estadoClase($cita->estado ?? 'pendiente') }}">
-                            {{ $estadoTexto($cita->estado ?? 'pendiente') }}
+                        {{ $cita['cliente'] ?? 'Cliente no registrado' }}
+                        @if(!empty($cita['telefono']))
+                            <br><span style="color:#777777;">{{ $cita['telefono'] }}</span>
+                        @endif
+                    </td>
+                    <td>{{ $cita['servicio'] ?? 'Sin servicio' }}</td>
+                    <td>
+                        <span class="badge {{ $estadoClase($cita['estado'] ?? 'pendiente') }}">
+                            {{ $estadoTexto($cita['estado'] ?? 'pendiente') }}
                         </span>
                     </td>
-                    <td class="text-right">{{ $formatoDinero($cita->precio ?? 0) }}</td>
-                    <td class="text-right">{{ $formatoDinero($totalPagadoCita) }}</td>
+                    <td>
+                        <span class="badge {{ $estadoPagoClase($cita['estado_pago'] ?? 'pendiente') }}">
+                            {{ $estadoPagoTexto($cita['estado_pago'] ?? 'pendiente') }}
+                        </span>
+                    </td>
+                    <td class="text-right">
+                        {{ $cita['precio_texto'] ?? $formatoDinero($cita['precio'] ?? 0) }}
+                    </td>
+                    <td class="text-right">
+                        {{ $cita['total_pagado_texto'] ?? $formatoDinero($cita['total_pagado'] ?? 0) }}
+                    </td>
+                    <td class="text-right">
+                        {{ $cita['pendiente_texto'] ?? $formatoDinero($cita['pendiente'] ?? 0) }}
+                    </td>
                 </tr>
             @endforeach
             </tbody>
         </table>
     @else
         <div class="empty-box">
-            No hay citas registradas para este mes.
+            No hay citas registradas para esta fecha.
         </div>
     @endif
+
+    <!-- NOTA -->
+    <div class="note-box">
+        Este reporte muestra los pagos recibidos y las citas registradas en la fecha seleccionada.
+        Sirve como respaldo para el cierre diario de caja del negocio.
+    </div>
 
     <!-- PIE -->
     <div class="footer">
         Reporte generado por <strong>{{ $nombreCorto }}</strong>.
-        Este documento resume la actividad mensual registrada en el sistema.
+        Documento de control interno para cierre de caja diaria.
     </div>
 
 </div>

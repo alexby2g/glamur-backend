@@ -14,7 +14,7 @@ use App\Http\Middleware\VerificarTokenSistema;
 
 /*
 |--------------------------------------------------------------------------
-| API ROUTES GLAMUR
+| API ROUTES GLAMUR / AUREA BEAUTY
 |--------------------------------------------------------------------------
 */
 
@@ -85,6 +85,12 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
+    // 🧾 CAJA DIARIA
+    // =====================================================
+    Route::get('/caja/diaria', [PagoController::class, 'cajaDiaria']);
+
+
+    // =====================================================
     // 💅 SERVICIOS / COMBOS
     // =====================================================
     Route::get('/servicios', [ServicioController::class, 'index']);
@@ -101,6 +107,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'marcarTodasLeidas']);
     Route::put('/notificaciones/{id}/leer', [NotificacionController::class, 'marcarLeida']);
     Route::delete('/notificaciones/limpiar', [NotificacionController::class, 'limpiar']);
+
 
     // =====================================================
     // 🗑️ HISTORIAL / RECUPERACIÓN
@@ -119,9 +126,11 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
     Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
 
-        // =====================================================
-        // 📄 REPORTES PDF
-        // =====================================================
-        Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
 
-    });
+    // =====================================================
+    // 📄 REPORTES PDF
+    // =====================================================
+    Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
+    Route::get('/reportes/caja-diaria', [ReporteController::class, 'cajaDiaria']);
+
+});
