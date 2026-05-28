@@ -16,6 +16,8 @@ class UsuarioSistema extends Model
         'nombre',
         'usuario',
         'password',
+        'rol',
+        'empleado_id',
         'token',
         'activo',
         'ultimo_acceso',
@@ -30,6 +32,11 @@ class UsuarioSistema extends Model
         'activo' => 'boolean',
         'ultimo_acceso' => 'datetime',
     ];
+
+    public function empleado()
+    {
+        return $this->belongsTo(\App\Models\Empleado::class)->withTrashed();
+    }
 
     public function setPasswordAttribute($value)
     {

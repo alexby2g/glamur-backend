@@ -9,6 +9,20 @@ use Symfony\Component\HttpFoundation\Response;
 
 class VerificarTokenSistema
 {
+    private array $rolesPermitidos = [
+        'admin',
+        'empleado',
+    ];
+
+    private function normalizarRol($rol): string
+    {
+        $rol = strtolower(trim((string) $rol));
+
+        return in_array($rol, $this->rolesPermitidos, true)
+            ? $rol
+            : 'admin';
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $token = $request->bearerToken()
@@ -21,7 +35,9 @@ class VerificarTokenSistema
             ], 401);
         }
 
-        $usuario = UsuarioSistema::where('token', $token)->first();
+        $usuario = UsuarioSistema::with('empleado')
+            ->where('token', $token)
+            ->first();
 
         if (!$usuario) {
             return response()->json([
@@ -35,7 +51,27 @@ class VerificarTokenSistema
             ], 403);
         }
 
+        $rol = $this->normalizarRol($usuario->rol ?? 'admin');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Datos disponibles para todos los controladores
+        |--------------------------------------------------------------------------
+        | Ahora cualquier controlador podrá obtener:
+        |
+        | $request->attributes->get('usuario_sistema')
+        | $request->attributes->get('usuario_rol')
+        | $request->attributes->get('usuario_empleado_id')
+        | $request->attributes->get('usuario_es_admin')
+        | $request->attributes->get('usuario_es_empleado')
+        |
+        */
+
         $request->attributes->set('usuario_sistema', $usuario);
+        $request->attributes->set('usuario_rol', $rol);
+        $request->attributes->set('usuario_empleado_id', $usuario->empleado_id);
+        $request->attributes->set('usuario_es_admin', $rol === 'admin');
+        $request->attributes->set('usuario_es_empleado', $rol === 'empleado');
 
         return $next($request);
     }

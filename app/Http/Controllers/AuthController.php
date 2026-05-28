@@ -10,11 +10,38 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    private array $rolesPermitidos = [
+        'admin',
+        'empleado',
+    ];
+
     private function obtenerToken(Request $request)
     {
         return $request->bearerToken()
             ?: $request->header('X-Auth-Token')
             ?: $request->input('token');
+    }
+
+    private function normalizarRol($rol): string
+    {
+        $rol = strtolower(trim((string) $rol));
+
+        return in_array($rol, $this->rolesPermitidos, true)
+            ? $rol
+            : 'admin';
+    }
+
+    private function respuestaUsuario(UsuarioSistema $usuario): array
+    {
+        return [
+            'id' => $usuario->id,
+            'nombre' => $usuario->nombre,
+            'usuario' => $usuario->usuario,
+            'rol' => $this->normalizarRol($usuario->rol ?? 'admin'),
+            'empleado_id' => $usuario->empleado_id ?? null,
+            'activo' => (bool) $usuario->activo,
+            'ultimo_acceso' => $usuario->ultimo_acceso,
+        ];
     }
 
     // =====================================================
@@ -64,6 +91,8 @@ class AuthController extends Controller
             'nombre' => trim($request->nombre),
             'usuario' => strtolower(trim($request->usuario)),
             'password' => $request->password,
+            'rol' => 'admin',
+            'empleado_id' => null,
             'token' => $token,
             'activo' => true,
             'ultimo_acceso' => now(),
@@ -72,13 +101,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Administrador registrado correctamente.',
             'token' => $token,
-            'usuario' => [
-                'id' => $usuario->id,
-                'nombre' => $usuario->nombre,
-                'usuario' => $usuario->usuario,
-                'activo' => $usuario->activo,
-                'ultimo_acceso' => $usuario->ultimo_acceso,
-            ]
+            'usuario' => $this->respuestaUsuario($usuario),
         ], 201);
     }
 
@@ -125,16 +148,12 @@ class AuthController extends Controller
             'ultimo_acceso' => now(),
         ]);
 
+        $usuario = $usuario->fresh();
+
         return response()->json([
             'message' => 'Inicio de sesión correcto.',
             'token' => $token,
-            'usuario' => [
-                'id' => $usuario->id,
-                'nombre' => $usuario->nombre,
-                'usuario' => $usuario->usuario,
-                'activo' => $usuario->activo,
-                'ultimo_acceso' => $usuario->ultimo_acceso,
-            ]
+            'usuario' => $this->respuestaUsuario($usuario),
         ]);
     }
 
@@ -159,14 +178,14 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if (!$usuario->activo) {
+            return response()->json([
+                'message' => 'Este usuario está desactivado.'
+            ], 403);
+        }
+
         return response()->json([
-            'usuario' => [
-                'id' => $usuario->id,
-                'nombre' => $usuario->nombre,
-                'usuario' => $usuario->usuario,
-                'activo' => $usuario->activo,
-                'ultimo_acceso' => $usuario->ultimo_acceso,
-            ]
+            'usuario' => $this->respuestaUsuario($usuario),
         ]);
     }
 
