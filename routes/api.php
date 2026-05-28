@@ -10,6 +10,7 @@ use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ConfiguracionController;
+use App\Http\Controllers\EmpleadoController;
 use App\Http\Middleware\VerificarTokenSistema;
 
 /*
@@ -62,6 +63,16 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
 
     Route::get('/clientes/historial/buscar', [ClienteController::class, 'historial']);
+
+
+    // =====================================================
+    // 👩‍💼 EMPLEADOS / PERSONAL
+    // =====================================================
+    Route::get('/empleados', [EmpleadoController::class, 'index']);
+    Route::get('/empleados/activos', [EmpleadoController::class, 'activos']);
+    Route::post('/empleados', [EmpleadoController::class, 'store']);
+    Route::put('/empleados/{id}', [EmpleadoController::class, 'update']);
+    Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy']);
 
 
     // =====================================================
