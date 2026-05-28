@@ -139,9 +139,10 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
 
 
     // =====================================================
-    // 📄 REPORTES PDF
+    // 📄 REPORTES
     // =====================================================
     Route::get('/reportes/extracto-mensual', [ReporteController::class, 'extractoMensual']);
     Route::get('/reportes/caja-diaria', [ReporteController::class, 'cajaDiaria']);
+    Route::get('/reportes/empleados', [ReporteController::class, 'empleados']);
 
 });
