@@ -11,6 +11,7 @@ class Cita extends Model
 
     protected $fillable = [
         'cliente_id',
+        'empleado_id',
         'fecha',
         'hora',
         'servicio',
@@ -23,6 +24,11 @@ class Cita extends Model
     public function cliente()
     {
         return $this->belongsTo(\App\Models\Cliente::class)->withTrashed();
+    }
+
+    public function empleado()
+    {
+        return $this->belongsTo(\App\Models\Empleado::class)->withTrashed();
     }
 
     public function pagos()

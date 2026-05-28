@@ -13,7 +13,10 @@ class CitaController extends Controller
     public function index()
     {
         return response()->json(
-            Cita::with('cliente')->orderBy('fecha', 'desc')->orderBy('hora', 'desc')->get()
+            Cita::with(['cliente', 'empleado'])
+                ->orderBy('fecha', 'desc')
+                ->orderBy('hora', 'desc')
+                ->get()
         );
     }
 
@@ -21,6 +24,7 @@ class CitaController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'cliente_id' => 'required|exists:clientes,id',
+            'empleado_id' => 'nullable|exists:empleados,id',
             'fecha' => 'required|date',
             'hora' => 'required|date_format:H:i',
             'servicio' => 'required|string|max:255',
@@ -31,6 +35,7 @@ class CitaController extends Controller
         ], [
             'cliente_id.required' => 'Debe seleccionar un cliente.',
             'cliente_id.exists' => 'El cliente seleccionado no existe.',
+            'empleado_id.exists' => 'El empleado seleccionado no existe.',
             'fecha.required' => 'La fecha es obligatoria.',
             'hora.required' => 'La hora es obligatoria.',
             'hora.date_format' => 'La hora debe tener formato HH:MM.',
@@ -39,7 +44,10 @@ class CitaController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Datos inválidos', 'errors' => $validator->errors()], 422);
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors(),
+            ], 422);
         }
 
         $existe = Cita::where('fecha', $request->fecha)
@@ -47,11 +55,14 @@ class CitaController extends Controller
             ->exists();
 
         if ($existe) {
-            return response()->json(['message' => 'Ya existe una cita en esa fecha y hora.'], 422);
+            return response()->json([
+                'message' => 'Ya existe una cita en esa fecha y hora.',
+            ], 422);
         }
 
         $cita = Cita::create([
             'cliente_id' => $request->cliente_id,
+            'empleado_id' => $request->empleado_id ?: null,
             'fecha' => $request->fecha,
             'hora' => $request->hora,
             'servicio' => trim($request->servicio),
@@ -61,7 +72,10 @@ class CitaController extends Controller
             'metodo_pago' => $request->metodo_pago,
         ]);
 
-        return response()->json(['message' => 'Cita registrada correctamente', 'cita' => $cita->load('cliente')], 201);
+        return response()->json([
+            'message' => 'Cita registrada correctamente',
+            'cita' => $cita->load(['cliente', 'empleado']),
+        ], 201);
     }
 
     public function update(Request $request, $id)
@@ -69,13 +83,23 @@ class CitaController extends Controller
         $cita = Cita::findOrFail($id);
 
         if ($request->has('estado') && count($request->all()) === 1) {
-            $request->validate(['estado' => 'required|in:pendiente,concluida,cancelada']);
-            $cita->update(['estado' => $request->estado]);
-            return response()->json(['message' => 'Estado actualizado correctamente', 'cita' => $cita->fresh('cliente')]);
+            $request->validate([
+                'estado' => 'required|in:pendiente,concluida,cancelada',
+            ]);
+
+            $cita->update([
+                'estado' => $request->estado,
+            ]);
+
+            return response()->json([
+                'message' => 'Estado actualizado correctamente',
+                'cita' => $cita->fresh(['cliente', 'empleado']),
+            ]);
         }
 
         $validator = Validator::make($request->all(), [
             'cliente_id' => 'required|exists:clientes,id',
+            'empleado_id' => 'nullable|exists:empleados,id',
             'fecha' => 'required|date',
             'hora' => 'required|date_format:H:i',
             'servicio' => 'required|string|max:255',
@@ -83,10 +107,22 @@ class CitaController extends Controller
             'estado' => 'nullable|in:pendiente,concluida,cancelada',
             'estado_pago' => 'nullable|in:pendiente,pagado',
             'metodo_pago' => 'nullable|string|max:50',
+        ], [
+            'cliente_id.required' => 'Debe seleccionar un cliente.',
+            'cliente_id.exists' => 'El cliente seleccionado no existe.',
+            'empleado_id.exists' => 'El empleado seleccionado no existe.',
+            'fecha.required' => 'La fecha es obligatoria.',
+            'hora.required' => 'La hora es obligatoria.',
+            'hora.date_format' => 'La hora debe tener formato HH:MM.',
+            'servicio.required' => 'El servicio es obligatorio.',
+            'precio.required' => 'El precio es obligatorio.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Datos inválidos', 'errors' => $validator->errors()], 422);
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors(),
+            ], 422);
         }
 
         $existe = Cita::where('fecha', $request->fecha)
@@ -95,28 +131,50 @@ class CitaController extends Controller
             ->exists();
 
         if ($existe) {
-            return response()->json(['message' => 'Ya existe otra cita en ese horario.'], 422);
+            return response()->json([
+                'message' => 'Ya existe otra cita en ese horario.',
+            ], 422);
         }
 
-        $cita->update($request->only([
-            'cliente_id', 'fecha', 'hora', 'servicio', 'precio', 'estado', 'estado_pago', 'metodo_pago'
-        ]));
+        $cita->update([
+            'cliente_id' => $request->cliente_id,
+            'empleado_id' => $request->empleado_id ?: null,
+            'fecha' => $request->fecha,
+            'hora' => $request->hora,
+            'servicio' => trim($request->servicio),
+            'precio' => $request->precio,
+            'estado' => $request->estado ?? $cita->estado,
+            'estado_pago' => $request->estado_pago ?? $cita->estado_pago,
+            'metodo_pago' => $request->metodo_pago,
+        ]);
 
-        return response()->json(['message' => 'Cita actualizada correctamente', 'cita' => $cita->fresh('cliente')]);
+        return response()->json([
+            'message' => 'Cita actualizada correctamente',
+            'cita' => $cita->fresh(['cliente', 'empleado']),
+        ]);
     }
 
     public function finalizar($id)
     {
         $cita = Cita::findOrFail($id);
-        $cita->update(['estado' => 'concluida']);
 
-        return response()->json(['message' => 'Cita finalizada correctamente', 'cita' => $cita->fresh('cliente')]);
+        $cita->update([
+            'estado' => 'concluida',
+        ]);
+
+        return response()->json([
+            'message' => 'Cita finalizada correctamente',
+            'cita' => $cita->fresh(['cliente', 'empleado']),
+        ]);
     }
 
     public function destroy($id)
     {
         Cita::findOrFail($id)->delete();
-        return response()->json(['message' => 'Cita eliminada correctamente']);
+
+        return response()->json([
+            'message' => 'Cita eliminada correctamente',
+        ]);
     }
 
     public function dashboard()
@@ -133,10 +191,12 @@ class CitaController extends Controller
                 ->sum('precio');
         };
 
-        $citasMes = Cita::whereBetween('fecha', [
-            $inicioMes->toDateString(),
-            $finMes->toDateString(),
-        ])->get();
+        $citasMes = Cita::with(['cliente', 'empleado'])
+            ->whereBetween('fecha', [
+                $inicioMes->toDateString(),
+                $finMes->toDateString(),
+            ])
+            ->get();
 
         $citasPorDia = $citasMes->groupBy(function ($cita) {
             return Carbon::parse($cita->fecha)->format('Y-m-d');
@@ -171,10 +231,12 @@ class CitaController extends Controller
             12 => 'Dic',
         ];
 
-        $citasAnio = Cita::whereBetween('fecha', [
-            $inicioAnio->toDateString(),
-            $finAnio->toDateString(),
-        ])->get();
+        $citasAnio = Cita::with(['cliente', 'empleado'])
+            ->whereBetween('fecha', [
+                $inicioAnio->toDateString(),
+                $finAnio->toDateString(),
+            ])
+            ->get();
 
         $citasPorMes = $citasAnio->groupBy(function ($cita) {
             return (int) Carbon::parse($cita->fecha)->format('m');
@@ -208,7 +270,24 @@ class CitaController extends Controller
             ->values()
             ->take(5);
 
-        $ultimasCitas = Cita::with('cliente')
+        $empleadosTop = Cita::with('empleado')
+            ->whereNotNull('empleado_id')
+            ->get()
+            ->groupBy(function ($cita) {
+                return $cita->empleado?->nombre ?: 'Sin empleado';
+            })
+            ->map(function ($grupo, $empleado) use ($sumarIngresos) {
+                return [
+                    'empleado' => $empleado,
+                    'cantidad' => $grupo->count(),
+                    'ingresos' => $sumarIngresos($grupo),
+                ];
+            })
+            ->sortByDesc('cantidad')
+            ->values()
+            ->take(5);
+
+        $ultimasCitas = Cita::with(['cliente', 'empleado'])
             ->orderBy('fecha', 'desc')
             ->orderBy('hora', 'desc')
             ->take(5)
@@ -247,6 +326,7 @@ class CitaController extends Controller
             'estadisticas_dias' => $estadisticasDias,
             'estadisticas_meses' => $estadisticasMeses,
             'servicios_top' => $serviciosTop,
+            'empleados_top' => $empleadosTop,
             'ultimas_citas' => $ultimasCitas,
         ]);
     }
