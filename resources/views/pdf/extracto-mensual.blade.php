@@ -1,267 +1,525 @@
+@php
+    $configuracion = $configuracion ?? [];
+
+    $nombreNegocio = $nombre_negocio ?? ($configuracion['nombre_negocio'] ?? 'AUREA Beauty Salon');
+    $nombreCorto = $nombre_corto ?? ($configuracion['nombre_corto'] ?? 'AUREA Beauty');
+    $sloganNegocio = $slogan ?? ($configuracion['slogan'] ?? 'Sistema inteligente para salones de belleza');
+    $telefonoNegocio = $telefono ?? ($configuracion['telefono'] ?? '');
+    $whatsappNegocio = $whatsapp ?? ($configuracion['whatsapp'] ?? '');
+    $direccionNegocio = $direccion ?? ($configuracion['direccion'] ?? '');
+    $logoNegocio = $logo_url ?? ($configuracion['logo_url'] ?? '');
+    $moneda = $moneda ?? ($configuracion['moneda'] ?? 'Bs');
+
+    $formatoDinero = function ($valor) use ($moneda) {
+        return trim($moneda . ' ' . number_format((float) $valor, 2, '.', ','));
+    };
+
+    $estadoTexto = function ($estado) {
+        return match ($estado) {
+            'concluida' => 'Concluida',
+            'cancelada' => 'Cancelada',
+            default => 'Pendiente',
+        };
+    };
+
+    $estadoClase = function ($estado) {
+        return match ($estado) {
+            'concluida' => 'estado-concluida',
+            'cancelada' => 'estado-cancelada',
+            default => 'estado-pendiente',
+        };
+    };
+
+    $nombreCliente = function ($cita) {
+        return $cita->cliente->nombre ?? 'Cliente no registrado';
+    };
+
+    $telefonoCliente = function ($cita) {
+        return $cita->cliente->telefono ?? '-';
+    };
+
+    $servicioCita = function ($cita) {
+        return $cita->servicio ?? 'Sin servicio';
+    };
+
+    $horaCita = function ($hora) {
+        if (!$hora) {
+            return '-';
+        }
+
+        try {
+            return \Carbon\Carbon::parse($hora)->format('H:i');
+        } catch (\Throwable $error) {
+            return $hora;
+        }
+    };
+
+    $fechaCita = function ($fecha) {
+        if (!$fecha) {
+            return '-';
+        }
+
+        try {
+            return \Carbon\Carbon::parse($fecha)->format('d/m/Y');
+        } catch (\Throwable $error) {
+            return $fecha;
+        }
+    };
+@endphp
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Extracto mensual Glamur</title>
+    <title>{{ $titulo ?? 'Extracto mensual' }}</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: DejaVu Sans, sans-serif;
-            font-size: 11px;
-            color: #222;
-            margin: 25px;
+            margin: 0;
+            padding: 0;
+            font-family: DejaVu Sans, Arial, sans-serif;
+            color: #241329;
+            background: #ffffff;
+            font-size: 12px;
+        }
+
+        .page {
+            padding: 24px;
         }
 
         .header {
-            background: #15111f;
-            color: white;
+            width: 100%;
             padding: 18px;
-            border-radius: 10px;
+            border-radius: 18px;
+            background: #241329;
+            color: #ffffff;
             margin-bottom: 18px;
         }
 
-        .title {
-            font-size: 24px;
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-left {
+            width: 75%;
+            vertical-align: middle;
+        }
+
+        .header-right {
+            width: 25%;
+            text-align: right;
+            vertical-align: middle;
+        }
+
+        .logo-box {
+            width: 78px;
+            height: 78px;
+            border-radius: 18px;
+            background: #e91e63;
+            text-align: center;
+            line-height: 78px;
+            color: #ffffff;
+            font-size: 26px;
             font-weight: bold;
+            display: inline-block;
+            overflow: hidden;
+        }
+
+        .logo-img {
+            width: 78px;
+            height: 78px;
+            object-fit: cover;
+            border-radius: 18px;
+        }
+
+        .brand {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #ffffff;
+        }
+
+        .slogan {
+            font-size: 12px;
+            color: #f8d7a1;
+            margin-bottom: 8px;
+        }
+
+        .business-info {
+            font-size: 10px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .title-box {
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #fff0f6;
+            border: 1px solid #f8bbd0;
+        }
+
+        .report-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #c2185b;
             margin-bottom: 4px;
         }
 
-        .subtitle {
+        .report-subtitle {
             font-size: 12px;
-            color: #f8d7a1;
+            color: #6a536d;
         }
 
-        .box-row {
+        .summary-grid {
             width: 100%;
-            margin-bottom: 18px;
+            border-collapse: separate;
+            border-spacing: 8px;
+            margin-bottom: 16px;
         }
 
-        .box {
-            display: inline-block;
-            width: 23%;
+        .summary-card {
+            width: 25%;
+            padding: 12px;
+            border-radius: 14px;
+            background: #fff7fb;
+            border: 1px solid #f8bbd0;
             vertical-align: top;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 10px;
-            margin-right: 1%;
-            min-height: 58px;
         }
 
-        .box-title {
-            color: #777;
+        .summary-label {
             font-size: 10px;
-            text-transform: uppercase;
-            margin-bottom: 5px;
+            color: #7a6f80;
+            margin-bottom: 6px;
+            font-weight: bold;
         }
 
-        .box-value {
+        .summary-value {
             font-size: 17px;
             font-weight: bold;
-            color: #c2185b;
+            color: #241329;
+        }
+
+        .summary-money {
+            color: #2e7d32;
+        }
+
+        .summary-warning {
+            color: #ef6c00;
+        }
+
+        .summary-danger {
+            color: #c62828;
         }
 
         .section-title {
             font-size: 15px;
             font-weight: bold;
+            color: #c2185b;
             margin: 18px 0 8px;
-            color: #880e4f;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #f8bbd0;
         }
 
-        table {
+        table.data-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
 
-        th {
-            background: #fce4ec;
-            color: #880e4f;
-            border: 1px solid #e0c7d2;
-            padding: 7px;
+        .data-table th {
+            background: #241329;
+            color: #ffffff;
+            padding: 8px;
             font-size: 10px;
             text-align: left;
+            border: 1px solid #241329;
         }
 
-        td {
-            border: 1px solid #e0e0e0;
-            padding: 6px;
+        .data-table td {
+            padding: 7px 8px;
+            border: 1px solid #eaddea;
             font-size: 10px;
+            vertical-align: top;
+        }
+
+        .data-table tr:nth-child(even) td {
+            background: #fff7fb;
         }
 
         .text-right {
             text-align: right;
         }
 
-        .estado {
+        .text-center {
+            text-align: center;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 9px;
             font-weight: bold;
-            text-transform: capitalize;
+            color: #ffffff;
         }
 
-        .pendiente {
-            color: #f9a825;
+        .estado-pendiente {
+            background: #ef6c00;
         }
 
-        .concluida {
-            color: #2e7d32;
+        .estado-concluida {
+            background: #2e7d32;
         }
 
-        .cancelada {
-            color: #c62828;
+        .estado-cancelada {
+            background: #c62828;
+        }
+
+        .empty-box {
+            padding: 22px;
+            border-radius: 14px;
+            background: #f7f7f7;
+            color: #777777;
+            text-align: center;
+            border: 1px dashed #cccccc;
+            margin-bottom: 14px;
         }
 
         .footer {
-            margin-top: 25px;
+            margin-top: 22px;
+            padding-top: 10px;
+            border-top: 1px solid #eaddea;
+            color: #777777;
             font-size: 9px;
-            color: #777;
             text-align: center;
         }
 
-        .empty {
-            padding: 15px;
-            border: 1px dashed #ccc;
-            color: #777;
-            text-align: center;
+        .footer strong {
+            color: #c2185b;
+        }
+
+        .small {
+            font-size: 9px;
+            color: #777777;
+        }
+
+        .page-break {
+            page-break-before: always;
         }
     </style>
 </head>
 
 <body>
+<div class="page">
 
+    <!-- ENCABEZADO -->
     <div class="header">
-        <div class="title">Glamur - Extracto mensual</div>
-        <div class="subtitle">
-            Mes: {{ ucfirst($mes_nombre) }} {{ $anio }} |
-            Periodo: {{ $fecha_inicio }} al {{ $fecha_fin }} |
-            Generado: {{ $fecha_generado }}
+        <table class="header-table">
+            <tr>
+                <td class="header-left">
+                    <div class="brand">{{ $nombreNegocio }}</div>
+                    <div class="slogan">{{ $sloganNegocio }}</div>
+
+                    <div class="business-info">
+                        @if($direccionNegocio)
+                            Dirección: {{ $direccionNegocio }}<br>
+                        @endif
+
+                        @if($telefonoNegocio)
+                            Teléfono: {{ $telefonoNegocio }}<br>
+                        @endif
+
+                        @if($whatsappNegocio)
+                            WhatsApp: {{ $whatsappNegocio }}
+                        @endif
+                    </div>
+                </td>
+
+                <td class="header-right">
+                    @if($logoNegocio)
+                        <img src="{{ $logoNegocio }}" class="logo-img" alt="Logo">
+                    @else
+                        <div class="logo-box">
+                            {{ mb_substr($nombreCorto, 0, 1) }}
+                        </div>
+                    @endif
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- TÍTULO REPORTE -->
+    <div class="title-box">
+        <div class="report-title">
+            {{ $titulo ?? 'Extracto mensual' }}
+        </div>
+
+        <div class="report-subtitle">
+            Periodo: {{ $mes_nombre ?? '' }} {{ $anio ?? '' }}
+            · Desde {{ $fecha_inicio ?? '-' }} hasta {{ $fecha_fin ?? '-' }}
+            · Generado: {{ $fecha_generado ?? '-' }}
         </div>
     </div>
 
-    <div class="box-row">
-        <div class="box">
-            <div class="box-title">Total citas</div>
-            <div class="box-value">{{ $total_citas }}</div>
-        </div>
+    <!-- RESUMEN PRINCIPAL -->
+    <table class="summary-grid">
+        <tr>
+            <td class="summary-card">
+                <div class="summary-label">Total de citas</div>
+                <div class="summary-value">{{ $total_citas ?? 0 }}</div>
+            </td>
 
-        <div class="box">
-            <div class="box-title">Total generado</div>
-            <div class="box-value">Bs {{ number_format($total_estimado, 2) }}</div>
-        </div>
+            <td class="summary-card">
+                <div class="summary-label">Total estimado</div>
+                <div class="summary-value summary-money">
+                    {{ $total_estimado_texto ?? $formatoDinero($total_estimado ?? 0) }}
+                </div>
+            </td>
 
-        <div class="box">
-            <div class="box-title">Total pagado</div>
-            <div class="box-value">Bs {{ number_format($total_pagado, 2) }}</div>
-        </div>
+            <td class="summary-card">
+                <div class="summary-label">Total pagado</div>
+                <div class="summary-value summary-money">
+                    {{ $total_pagado_texto ?? $formatoDinero($total_pagado ?? 0) }}
+                </div>
+            </td>
 
-        <div class="box">
-            <div class="box-title">Pendiente por cobrar</div>
-            <div class="box-value">Bs {{ number_format($total_pendiente, 2) }}</div>
-        </div>
-    </div>
+            <td class="summary-card">
+                <div class="summary-label">Total pendiente</div>
+                <div class="summary-value summary-warning">
+                    {{ $total_pendiente_texto ?? $formatoDinero($total_pendiente ?? 0) }}
+                </div>
+            </td>
+        </tr>
+    </table>
 
-    <div class="box-row">
-        <div class="box">
-            <div class="box-title">Pendientes</div>
-            <div class="box-value">{{ $citas_pendientes }}</div>
-        </div>
+    <table class="summary-grid">
+        <tr>
+            <td class="summary-card">
+                <div class="summary-label">Citas pendientes</div>
+                <div class="summary-value summary-warning">{{ $citas_pendientes ?? 0 }}</div>
+            </td>
 
-        <div class="box">
-            <div class="box-title">Concluidas</div>
-            <div class="box-value">{{ $citas_concluidas }}</div>
-        </div>
+            <td class="summary-card">
+                <div class="summary-label">Citas concluidas</div>
+                <div class="summary-value summary-money">{{ $citas_concluidas ?? 0 }}</div>
+            </td>
 
-        <div class="box">
-            <div class="box-title">Canceladas</div>
-            <div class="box-value">{{ $citas_canceladas }}</div>
-        </div>
-    </div>
+            <td class="summary-card">
+                <div class="summary-label">Citas canceladas</div>
+                <div class="summary-value summary-danger">{{ $citas_canceladas ?? 0 }}</div>
+            </td>
 
+            <td class="summary-card">
+                <div class="summary-label">Moneda</div>
+                <div class="summary-value">{{ $moneda }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- RESUMEN POR DÍA -->
     <div class="section-title">Resumen por día</div>
 
-    @if(count($resumenDias) === 0)
-        <div class="empty">
-            No existen citas registradas en este mes.
-        </div>
-    @else
-        <table>
+    @if(!empty($resumenDias) && count($resumenDias) > 0)
+        <table class="data-table">
             <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Citas</th>
-                    <th>Pendientes</th>
-                    <th>Concluidas</th>
-                    <th>Canceladas</th>
-                    <th class="text-right">Generado</th>
-                    <th class="text-right">Pagado</th>
-                </tr>
+            <tr>
+                <th>Día</th>
+                <th class="text-center">Citas</th>
+                <th class="text-center">Pend.</th>
+                <th class="text-center">Concl.</th>
+                <th class="text-center">Canc.</th>
+                <th class="text-right">Estimado</th>
+                <th class="text-right">Pagado</th>
+                <th class="text-right">Pendiente</th>
+            </tr>
             </thead>
 
             <tbody>
-                @foreach($resumenDias as $dia)
-                    <tr>
-                        <td>{{ ucfirst($dia['dia']) }}</td>
-                        <td>{{ $dia['total_citas'] }}</td>
-                        <td>{{ $dia['pendientes'] }}</td>
-                        <td>{{ $dia['concluidas'] }}</td>
-                        <td>{{ $dia['canceladas'] }}</td>
-                        <td class="text-right">Bs {{ number_format($dia['total_estimado'], 2) }}</td>
-                        <td class="text-right">Bs {{ number_format($dia['total_pagado'], 2) }}</td>
-                    </tr>
-                @endforeach
+            @foreach($resumenDias as $dia)
+                <tr>
+                    <td>{{ ucfirst($dia['dia'] ?? '') }}</td>
+                    <td class="text-center">{{ $dia['total_citas'] ?? 0 }}</td>
+                    <td class="text-center">{{ $dia['pendientes'] ?? 0 }}</td>
+                    <td class="text-center">{{ $dia['concluidas'] ?? 0 }}</td>
+                    <td class="text-center">{{ $dia['canceladas'] ?? 0 }}</td>
+                    <td class="text-right">
+                        {{ $dia['total_estimado_texto'] ?? $formatoDinero($dia['total_estimado'] ?? 0) }}
+                    </td>
+                    <td class="text-right">
+                        {{ $dia['total_pagado_texto'] ?? $formatoDinero($dia['total_pagado'] ?? 0) }}
+                    </td>
+                    <td class="text-right">
+                        {{ $dia['total_pendiente_texto'] ?? $formatoDinero($dia['total_pendiente'] ?? 0) }}
+                    </td>
+                </tr>
+            @endforeach
             </tbody>
         </table>
+    @else
+        <div class="empty-box">
+            No hay movimientos diarios para este mes.
+        </div>
     @endif
 
+    <!-- DETALLE DE CITAS -->
     <div class="section-title">Detalle de citas del mes</div>
 
-    @if($citas->count() === 0)
-        <div class="empty">
-            No existen citas para mostrar.
-        </div>
-    @else
-        <table>
+    @if(isset($citas) && $citas->count() > 0)
+        <table class="data-table">
             <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Cliente</th>
-                    <th>Servicio</th>
-                    <th>Estado</th>
-                    <th>Pago</th>
-                    <th>Método</th>
-                    <th class="text-right">Precio</th>
-                    <th class="text-right">Pagado</th>
-                </tr>
+            <tr>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Servicio</th>
+                <th>Estado</th>
+                <th class="text-right">Precio</th>
+                <th class="text-right">Pagado</th>
+            </tr>
             </thead>
 
             <tbody>
-                @foreach($citas as $cita)
-                    @php
-                        $pagado = $cita->pagos->sum(function ($pago) {
-                            return (float) ($pago->monto ?? 0);
-                        });
-                    @endphp
+            @foreach($citas as $cita)
+                @php
+                    $totalPagadoCita = $cita->pagos ? $cita->pagos->sum('monto') : 0;
+                @endphp
 
-                    <tr>
-                        <td>{{ \Carbon\Carbon::parse($cita->fecha)->format('d/m/Y') }}</td>
-                        <td>{{ substr($cita->hora, 0, 5) }}</td>
-                        <td>{{ $cita->cliente->nombre ?? 'Sin cliente' }}</td>
-                        <td>{{ $cita->servicio }}</td>
-                        <td class="estado {{ $cita->estado }}">{{ $cita->estado }}</td>
-                        <td class="estado {{ $cita->estado_pago === 'pagado' ? 'concluida' : 'pendiente' }}">
-                            {{ $cita->estado_pago ?? 'pendiente' }}
-                        </td>
-                        <td>{{ strtoupper($cita->metodo_pago ?? '-') }}</td>
-                        <td class="text-right">Bs {{ number_format((float) $cita->precio, 2) }}</td>
-                        <td class="text-right">Bs {{ number_format($pagado, 2) }}</td>
-                    </tr>
-                @endforeach
+                <tr>
+                    <td>{{ $fechaCita($cita->fecha ?? null) }}</td>
+                    <td>{{ $horaCita($cita->hora ?? null) }}</td>
+                    <td>{{ $nombreCliente($cita) }}</td>
+                    <td>{{ $telefonoCliente($cita) }}</td>
+                    <td>{{ $servicioCita($cita) }}</td>
+                    <td>
+                        <span class="badge {{ $estadoClase($cita->estado ?? 'pendiente') }}">
+                            {{ $estadoTexto($cita->estado ?? 'pendiente') }}
+                        </span>
+                    </td>
+                    <td class="text-right">{{ $formatoDinero($cita->precio ?? 0) }}</td>
+                    <td class="text-right">{{ $formatoDinero($totalPagadoCita) }}</td>
+                </tr>
+            @endforeach
             </tbody>
         </table>
+    @else
+        <div class="empty-box">
+            No hay citas registradas para este mes.
+        </div>
     @endif
 
+    <!-- PIE -->
     <div class="footer">
-        Documento generado automáticamente por Glamur.
+        Reporte generado por <strong>{{ $nombreCorto }}</strong>.
+        Este documento resume la actividad mensual registrada en el sistema.
     </div>
 
+</div>
 </body>
 </html>

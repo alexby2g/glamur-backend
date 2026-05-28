@@ -3,14 +3,61 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cita;
+use App\Models\Configuracion;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ReporteController extends Controller
 {
+    private function valoresBaseConfiguracion(): array
+    {
+        return [
+            'nombre_negocio' => 'AUREA Beauty Salon',
+            'nombre_corto' => 'AUREA Beauty',
+            'slogan' => 'Sistema inteligente para salones de belleza',
+            'telefono' => '',
+            'whatsapp' => '',
+            'direccion' => '',
+            'mensaje_whatsapp' => 'Hola, quiero información sobre los servicios de AUREA Beauty Salon.',
+            'logo_url' => '',
+            'moneda' => 'Bs',
+            'activo' => true,
+        ];
+    }
+
+    private function obtenerConfiguracionNegocio(): array
+    {
+        try {
+            $configuracion = Configuracion::query()->first();
+
+            if ($configuracion) {
+                return array_merge(
+                    $this->valoresBaseConfiguracion(),
+                    $configuracion->toArray()
+                );
+            }
+        } catch (\Throwable $error) {
+            // Si la tabla aún no existe o Render está aplicando migraciones,
+            // usamos valores base para no romper el PDF.
+        }
+
+        return $this->valoresBaseConfiguracion();
+    }
+
+    private function dinero($monto, string $moneda = 'Bs'): string
+    {
+        return trim($moneda . ' ' . number_format((float) $monto, 2, '.', ','));
+    }
+
     public function extractoMensual(Request $request)
     {
+        Carbon::setLocale('es');
+
+        $configuracion = $this->obtenerConfiguracionNegocio();
+        $moneda = $configuracion['moneda'] ?: 'Bs';
+
         $anio = (int) $request->get('anio', now()->year);
         $mes = (int) $request->get('mes', now()->month);
 
@@ -73,6 +120,8 @@ class ReporteController extends Controller
                 });
             });
 
+            $totalPendienteDia = max($totalEstimadoDia - $totalPagadoDia, 0);
+
             if ($citasDia->count() > 0) {
                 $resumenDias[] = [
                     'fecha' => $fechaDia,
@@ -83,23 +132,45 @@ class ReporteController extends Controller
                     'canceladas' => $citasDia->where('estado', 'cancelada')->count(),
                     'total_estimado' => $totalEstimadoDia,
                     'total_pagado' => $totalPagadoDia,
+                    'total_pendiente' => $totalPendienteDia,
+                    'total_estimado_texto' => $this->dinero($totalEstimadoDia, $moneda),
+                    'total_pagado_texto' => $this->dinero($totalPagadoDia, $moneda),
+                    'total_pendiente_texto' => $this->dinero($totalPendienteDia, $moneda),
                 ];
             }
         }
 
         $datos = [
-            'titulo' => 'Extracto mensual Glamur',
-            'mes_nombre' => $inicio->locale('es')->isoFormat('MMMM'),
+            'titulo' => 'Extracto mensual ' . ($configuracion['nombre_corto'] ?: 'AUREA Beauty'),
+            'configuracion' => $configuracion,
+
+            'nombre_negocio' => $configuracion['nombre_negocio'] ?: 'AUREA Beauty Salon',
+            'nombre_corto' => $configuracion['nombre_corto'] ?: 'AUREA Beauty',
+            'slogan' => $configuracion['slogan'] ?: 'Sistema inteligente para salones de belleza',
+            'telefono' => $configuracion['telefono'] ?? '',
+            'whatsapp' => $configuracion['whatsapp'] ?? '',
+            'direccion' => $configuracion['direccion'] ?? '',
+            'logo_url' => $configuracion['logo_url'] ?? '',
+            'moneda' => $moneda,
+
+            'mes_nombre' => ucfirst($inicio->locale('es')->isoFormat('MMMM')),
             'anio' => $anio,
             'fecha_inicio' => $inicio->format('d/m/Y'),
             'fecha_fin' => $fin->format('d/m/Y'),
             'fecha_generado' => now()->format('d/m/Y H:i'),
+
             'citas' => $citas,
             'resumenDias' => $resumenDias,
+
             'total_citas' => $citas->count(),
             'total_estimado' => $totalEstimado,
             'total_pagado' => $totalPagado,
             'total_pendiente' => $totalPendiente,
+
+            'total_estimado_texto' => $this->dinero($totalEstimado, $moneda),
+            'total_pagado_texto' => $this->dinero($totalPagado, $moneda),
+            'total_pendiente_texto' => $this->dinero($totalPendiente, $moneda),
+
             'citas_concluidas' => $citasConcluidas,
             'citas_pendientes' => $citasPendientes,
             'citas_canceladas' => $citasCanceladas,
@@ -108,7 +179,8 @@ class ReporteController extends Controller
         $pdf = Pdf::loadView('pdf.extracto-mensual', $datos)
             ->setPaper('a4', 'portrait');
 
-        $nombreArchivo = 'extracto_glamur_' . $anio . '_' . str_pad($mes, 2, '0', STR_PAD_LEFT) . '.pdf';
+        $nombreSistema = Str::slug($configuracion['nombre_corto'] ?: 'aurea_beauty');
+        $nombreArchivo = 'extracto_' . $nombreSistema . '_' . $anio . '_' . str_pad($mes, 2, '0', STR_PAD_LEFT) . '.pdf';
 
         return $pdf->download($nombreArchivo);
     }

@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Configuracion;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class ConfiguracionController extends Controller
@@ -27,51 +25,73 @@ class ConfiguracionController extends Controller
         ];
     }
 
-    private function asegurarTablaConfiguraciones(): void
+    private function camposPermitidos(): array
     {
-        if (!Schema::hasTable('configuraciones')) {
-            Schema::create('configuraciones', function (Blueprint $table) {
-                $table->id();
-                $table->string('nombre_negocio')->default('AUREA Beauty Salon');
-                $table->string('nombre_corto')->default('AUREA Beauty');
-                $table->string('slogan')->nullable();
-                $table->string('telefono')->nullable();
-                $table->string('whatsapp')->nullable();
-                $table->string('direccion')->nullable();
-                $table->text('mensaje_whatsapp')->nullable();
-                $table->text('logo_url')->nullable();
-                $table->string('moneda', 20)->default('Bs');
-                $table->boolean('activo')->default(true);
-                $table->timestamps();
-            });
-        }
-
-        $columnas = [
-            'nombre_negocio' => fn (Blueprint $table) => $table->string('nombre_negocio')->default('AUREA Beauty Salon'),
-            'nombre_corto' => fn (Blueprint $table) => $table->string('nombre_corto')->default('AUREA Beauty'),
-            'slogan' => fn (Blueprint $table) => $table->string('slogan')->nullable(),
-            'telefono' => fn (Blueprint $table) => $table->string('telefono')->nullable(),
-            'whatsapp' => fn (Blueprint $table) => $table->string('whatsapp')->nullable(),
-            'direccion' => fn (Blueprint $table) => $table->string('direccion')->nullable(),
-            'mensaje_whatsapp' => fn (Blueprint $table) => $table->text('mensaje_whatsapp')->nullable(),
-            'logo_url' => fn (Blueprint $table) => $table->text('logo_url')->nullable(),
-            'moneda' => fn (Blueprint $table) => $table->string('moneda', 20)->default('Bs'),
-            'activo' => fn (Blueprint $table) => $table->boolean('activo')->default(true),
+        return [
+            'nombre_negocio',
+            'nombre_corto',
+            'slogan',
+            'telefono',
+            'whatsapp',
+            'direccion',
+            'mensaje_whatsapp',
+            'logo_url',
+            'moneda',
+            'activo',
         ];
+    }
 
-        foreach ($columnas as $columna => $callback) {
-            if (!Schema::hasColumn('configuraciones', $columna)) {
-                Schema::table('configuraciones', function (Blueprint $table) use ($callback) {
-                    $callback($table);
-                });
+    private function limpiarTexto($valor): string
+    {
+        return trim((string) ($valor ?? ''));
+    }
+
+    private function normalizar(array $datos = []): array
+    {
+        $base = $this->valoresBase();
+        $normalizado = [];
+
+        foreach ($this->camposPermitidos() as $campo) {
+            $valor = $datos[$campo] ?? $base[$campo];
+
+            if ($campo === 'activo') {
+                $normalizado[$campo] = filter_var($valor, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+                if ($normalizado[$campo] === null) {
+                    $normalizado[$campo] = true;
+                }
+
+                continue;
             }
+
+            $normalizado[$campo] = $this->limpiarTexto($valor);
         }
+
+        if ($normalizado['nombre_negocio'] === '') {
+            $normalizado['nombre_negocio'] = $base['nombre_negocio'];
+        }
+
+        if ($normalizado['nombre_corto'] === '') {
+            $normalizado['nombre_corto'] = $base['nombre_corto'];
+        }
+
+        if ($normalizado['slogan'] === '') {
+            $normalizado['slogan'] = $base['slogan'];
+        }
+
+        if ($normalizado['mensaje_whatsapp'] === '') {
+            $normalizado['mensaje_whatsapp'] = $base['mensaje_whatsapp'];
+        }
+
+        if ($normalizado['moneda'] === '') {
+            $normalizado['moneda'] = $base['moneda'];
+        }
+
+        return $normalizado;
     }
 
     private function obtenerConfiguracion(): Configuracion
     {
-        $this->asegurarTablaConfiguraciones();
-
         $configuracion = Configuracion::query()->first();
 
         if (!$configuracion) {
@@ -81,59 +101,93 @@ class ConfiguracionController extends Controller
         return $configuracion;
     }
 
+    private function respuestaConfiguracion(Configuracion $configuracion): array
+    {
+        return $this->normalizar($configuracion->toArray());
+    }
+
     public function publica(): JsonResponse
     {
-        $configuracion = $this->obtenerConfiguracion();
+        try {
+            $configuracion = $this->obtenerConfiguracion();
 
-        return response()->json([
-            'configuracion' => $configuracion,
-        ]);
+            return response()->json([
+                'configuracion' => $this->respuestaConfiguracion($configuracion),
+            ]);
+        } catch (\Throwable $error) {
+            return response()->json([
+                'configuracion' => $this->valoresBase(),
+            ]);
+        }
     }
 
     public function index(): JsonResponse
     {
-        $configuracion = $this->obtenerConfiguracion();
+        try {
+            $configuracion = $this->obtenerConfiguracion();
 
-        return response()->json([
-            'configuracion' => $configuracion,
-        ]);
+            return response()->json([
+                'configuracion' => $this->respuestaConfiguracion($configuracion),
+            ]);
+        } catch (\Throwable $error) {
+            return response()->json([
+                'message' => 'No se pudo cargar la configuración.',
+                'configuracion' => $this->valoresBase(),
+            ], 500);
+        }
     }
 
     public function update(Request $request): JsonResponse
     {
-        $configuracion = $this->obtenerConfiguracion();
-
         $validator = Validator::make($request->all(), [
-            'nombre_negocio' => ['required', 'string', 'max:150'],
-            'nombre_corto' => ['required', 'string', 'max:80'],
-            'slogan' => ['nullable', 'string', 'max:255'],
-            'telefono' => ['nullable', 'string', 'max:80'],
-            'whatsapp' => ['nullable', 'string', 'max:80'],
-            'direccion' => ['nullable', 'string', 'max:255'],
-            'mensaje_whatsapp' => ['nullable', 'string', 'max:1000'],
-            'logo_url' => ['nullable', 'string', 'max:1000'],
-            'moneda' => ['nullable', 'string', 'max:20'],
-            'activo' => ['nullable', 'boolean'],
+            'nombre_negocio' => 'nullable|string|max:150',
+            'nombre_corto' => 'nullable|string|max:100',
+            'slogan' => 'nullable|string|max:255',
+            'telefono' => 'nullable|string|max:50',
+            'whatsapp' => 'nullable|string|max:50',
+            'direccion' => 'nullable|string|max:255',
+            'mensaje_whatsapp' => 'nullable|string|max:1000',
+            'logo_url' => 'nullable|string|max:1000',
+            'moneda' => 'nullable|string|max:10',
+            'activo' => 'nullable|boolean',
         ], [
-            'nombre_negocio.required' => 'El nombre del negocio es obligatorio.',
-            'nombre_corto.required' => 'El nombre corto es obligatorio.',
+            'nombre_negocio.max' => 'El nombre del negocio es demasiado largo.',
+            'nombre_corto.max' => 'El nombre corto es demasiado largo.',
+            'slogan.max' => 'El slogan es demasiado largo.',
+            'telefono.max' => 'El teléfono es demasiado largo.',
+            'whatsapp.max' => 'El WhatsApp es demasiado largo.',
+            'direccion.max' => 'La dirección es demasiado larga.',
+            'mensaje_whatsapp.max' => 'El mensaje de WhatsApp es demasiado largo.',
+            'logo_url.max' => 'La URL del logo es demasiado larga.',
+            'moneda.max' => 'La moneda es demasiado larga.',
+            'activo.boolean' => 'El estado activo debe ser verdadero o falso.',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Hay datos incorrectos en la configuración.',
+                'message' => 'Datos inválidos.',
                 'errors' => $validator->errors(),
             ], 422);
         }
 
-        $datos = array_merge($this->valoresBase(), $validator->validated());
-        $datos['activo'] = (bool) ($datos['activo'] ?? true);
+        try {
+            $configuracion = $this->obtenerConfiguracion();
 
-        $configuracion->update($datos);
+            $actual = $this->respuestaConfiguracion($configuracion);
+            $nuevosDatos = array_merge($actual, $request->only($this->camposPermitidos()));
+            $nuevosDatos = $this->normalizar($nuevosDatos);
 
-        return response()->json([
-            'message' => 'Configuración actualizada correctamente.',
-            'configuracion' => $configuracion->fresh(),
-        ]);
+            $configuracion->update($nuevosDatos);
+            $configuracion->refresh();
+
+            return response()->json([
+                'message' => 'Configuración actualizada correctamente.',
+                'configuracion' => $this->respuestaConfiguracion($configuracion),
+            ]);
+        } catch (\Throwable $error) {
+            return response()->json([
+                'message' => 'No se pudo guardar la configuración.',
+            ], 500);
+        }
     }
 }
