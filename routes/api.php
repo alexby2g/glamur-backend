@@ -9,6 +9,7 @@ use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Middleware\VerificarTokenSistema;
 
 /*
@@ -24,6 +25,7 @@ use App\Http\Middleware\VerificarTokenSistema;
 // El registro queda protegido por el código secreto en AuthController.
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']);
 
 
 // =====================================================
@@ -42,6 +44,13 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // 📊 DASHBOARD
     // =====================================================
     Route::get('/dashboard', [CitaController::class, 'dashboard']);
+
+
+    // =====================================================
+    // ⚙️ CONFIGURACIÓN DEL NEGOCIO
+    // =====================================================
+    Route::get('/configuracion', [ConfiguracionController::class, 'index']);
+    Route::put('/configuracion', [ConfiguracionController::class, 'update']);
 
 
     // =====================================================
