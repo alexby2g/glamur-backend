@@ -12,16 +12,17 @@ class UsuarioSistema extends Model
 
     protected $table = 'usuario_sistemas';
 
-    protected $fillable = [
-        'nombre',
-        'usuario',
-        'password',
-        'rol',
-        'empleado_id',
-        'token',
-        'activo',
-        'ultimo_acceso',
-    ];
+   protected $fillable = [
+    'nombre',
+    'usuario',
+    'password',
+    'rol',
+    'empleado_id',
+    'foto_perfil',
+    'token',
+    'activo',
+    'ultimo_acceso',
+];
 
     protected $hidden = [
         'password',
