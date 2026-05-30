@@ -97,6 +97,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
         // 👩‍💼 EMPLEADOS / PERSONAL
         // =====================================================
         Route::get('/empleados', [EmpleadoController::class, 'index']);
+        Route::get('/empleados/comisiones', [EmpleadoController::class, 'comisiones']);
         Route::post('/empleados', [EmpleadoController::class, 'store']);
         Route::put('/empleados/{id}', [EmpleadoController::class, 'update']);
         Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy']);

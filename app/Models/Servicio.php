@@ -24,4 +24,14 @@ class Servicio extends Model
         'precio' => 'decimal:2',
         'activo' => 'boolean',
     ];
+
+    public function scopeActivos($query)
+    {
+        return $query->where('activo', true);
+    }
+
+    public function getPrecioFormateadoAttribute()
+    {
+        return 'Bs ' . number_format((float) $this->precio, 2, ',', '.');
+    }
 }

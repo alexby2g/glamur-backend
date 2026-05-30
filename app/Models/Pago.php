@@ -35,4 +35,29 @@ class Pago extends Model
     {
         return $this->belongsTo(Cliente::class);
     }
+
+    public function empleado()
+    {
+        return $this->hasOneThrough(
+            Empleado::class,
+            Cita::class,
+            'id',
+            'id',
+            'cita_id',
+            'empleado_id'
+        );
+    }
+
+    public function getComisionEmpleadoAttribute()
+    {
+        if (!$this->cita || !$this->cita->empleado) {
+            return 0;
+        }
+
+        if ($this->estado !== 'pagado') {
+            return 0;
+        }
+
+        return $this->cita->empleado->calcularComision($this->monto);
+    }
 }

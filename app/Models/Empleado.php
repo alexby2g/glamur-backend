@@ -39,6 +39,11 @@ class Empleado extends Model
         return $this->hasMany(Cita::class, 'empleado_id');
     }
 
+    public function cuentaSistema()
+    {
+        return $this->hasOne(UsuarioSistema::class, 'empleado_id');
+    }
+
     public function scopeActivos($query)
     {
         return $query->where('activo', true);
@@ -47,5 +52,13 @@ class Empleado extends Model
     public function getEstadoTextoAttribute()
     {
         return $this->activo ? 'Activo' : 'Inactivo';
+    }
+
+    public function calcularComision($totalGenerado = 0)
+    {
+        $porcentaje = (float) $this->comision_porcentaje;
+        $total = (float) $totalGenerado;
+
+        return round(($total * $porcentaje) / 100, 2);
     }
 }
