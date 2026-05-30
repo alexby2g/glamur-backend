@@ -1,37 +1,50 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+namespace App\Models;
 
-return new class extends Migration
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Hash;
+
+class UsuarioSistema extends Model
 {
-    /**
-     * Ejecutar migración.
-     */
-    public function up(): void
+    use HasFactory;
+
+    protected $table = 'usuario_sistemas';
+
+    protected $fillable = [
+        'nombre',
+        'usuario',
+        'password',
+        'rol',
+        'empleado_id',
+        'foto_perfil',
+        'token',
+        'activo',
+        'ultimo_acceso',
+    ];
+
+    protected $hidden = [
+        'password',
+        'token',
+    ];
+
+    protected $casts = [
+        'activo' => 'boolean',
+        'ultimo_acceso' => 'datetime',
+    ];
+
+    public function empleado()
     {
-        Schema::create('usuario_sistemas', function (Blueprint $table) {
-            $table->id();
-
-            $table->string('nombre');
-            $table->string('usuario')->unique();
-            $table->string('password');
-
-            $table->string('token', 100)->nullable()->unique();
-
-            $table->boolean('activo')->default(true);
-            $table->timestamp('ultimo_acceso')->nullable();
-
-            $table->timestamps();
-        });
+        return $this->belongsTo(\App\Models\Empleado::class)->withTrashed();
     }
 
-    /**
-     * Revertir migración.
-     */
-    public function down(): void
+    public function setPasswordAttribute($value)
     {
-        Schema::dropIfExists('usuario_sistemas');
+        if ($value && Hash::needsRehash($value)) {
+            $this->attributes['password'] = Hash::make($value);
+        } else {
+            $this->attributes['password'] = $value;
+        }
     }
-};
+}

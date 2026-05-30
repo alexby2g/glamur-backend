@@ -34,10 +34,14 @@ Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']
 Route::middleware([VerificarTokenSistema::class])->group(function () {
 
     // =====================================================
-    // 🔐 SESIÓN
+    // 🔐 SESIÓN / PERFIL
     // =====================================================
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Foto de perfil del usuario autenticado
+    Route::put('/perfil/foto', [AuthController::class, 'actualizarFotoPerfil']);
+    Route::delete('/perfil/foto', [AuthController::class, 'eliminarFotoPerfil']);
 
 
     // =====================================================

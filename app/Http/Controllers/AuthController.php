@@ -31,6 +31,17 @@ class AuthController extends Controller
             : 'admin';
     }
 
+    private function obtenerUsuarioPorToken(Request $request)
+    {
+        $token = $this->obtenerToken($request);
+
+        if (!$token) {
+            return null;
+        }
+
+        return UsuarioSistema::where('token', $token)->first();
+    }
+
     private function respuestaUsuario(UsuarioSistema $usuario): array
     {
         return [
@@ -39,9 +50,19 @@ class AuthController extends Controller
             'usuario' => $usuario->usuario,
             'rol' => $this->normalizarRol($usuario->rol ?? 'admin'),
             'empleado_id' => $usuario->empleado_id ?? null,
+            'foto_perfil' => $usuario->foto_perfil ?? null,
             'activo' => (bool) $usuario->activo,
             'ultimo_acceso' => $usuario->ultimo_acceso,
         ];
+    }
+
+    private function validarFotoPerfil(?string $foto): bool
+    {
+        if (!$foto) {
+            return false;
+        }
+
+        return preg_match('/^data:image\/(png|jpg|jpeg|webp);base64,/', $foto) === 1;
     }
 
     // =====================================================
@@ -93,6 +114,7 @@ class AuthController extends Controller
             'password' => $request->password,
             'rol' => 'admin',
             'empleado_id' => null,
+            'foto_perfil' => null,
             'token' => $token,
             'activo' => true,
             'ultimo_acceso' => now(),
@@ -185,6 +207,91 @@ class AuthController extends Controller
         }
 
         return response()->json([
+            'usuario' => $this->respuestaUsuario($usuario),
+        ]);
+    }
+
+    // =====================================================
+    // 🖼️ ACTUALIZAR FOTO DE PERFIL
+    // =====================================================
+    public function actualizarFotoPerfil(Request $request)
+    {
+        $usuario = $this->obtenerUsuarioPorToken($request);
+
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión inválida o expirada.'
+            ], 401);
+        }
+
+        if (!$usuario->activo) {
+            return response()->json([
+                'message' => 'Este usuario está desactivado.'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'foto_perfil' => 'required|string|max:3000000',
+        ], [
+            'foto_perfil.required' => 'La foto de perfil es obligatoria.',
+            'foto_perfil.string' => 'La foto debe enviarse en formato válido.',
+            'foto_perfil.max' => 'La foto es demasiado grande. Usa una imagen más pequeña.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $fotoPerfil = $request->input('foto_perfil');
+
+        if (!$this->validarFotoPerfil($fotoPerfil)) {
+            return response()->json([
+                'message' => 'Formato de imagen inválido. Usa JPG, PNG o WEBP.'
+            ], 422);
+        }
+
+        $usuario->update([
+            'foto_perfil' => $fotoPerfil,
+        ]);
+
+        $usuario = $usuario->fresh();
+
+        return response()->json([
+            'message' => 'Foto de perfil actualizada correctamente.',
+            'usuario' => $this->respuestaUsuario($usuario),
+        ]);
+    }
+
+    // =====================================================
+    // 🗑️ ELIMINAR FOTO DE PERFIL
+    // =====================================================
+    public function eliminarFotoPerfil(Request $request)
+    {
+        $usuario = $this->obtenerUsuarioPorToken($request);
+
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión inválida o expirada.'
+            ], 401);
+        }
+
+        if (!$usuario->activo) {
+            return response()->json([
+                'message' => 'Este usuario está desactivado.'
+            ], 403);
+        }
+
+        $usuario->update([
+            'foto_perfil' => null,
+        ]);
+
+        $usuario = $usuario->fresh();
+
+        return response()->json([
+            'message' => 'Foto de perfil eliminada correctamente.',
             'usuario' => $this->respuestaUsuario($usuario),
         ]);
     }
