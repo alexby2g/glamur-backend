@@ -35,13 +35,10 @@ class PagoController extends Controller
             $configuracion = Configuracion::query()->first();
 
             if ($configuracion) {
-                return array_merge(
-                    $this->valoresBaseConfiguracion(),
-                    $configuracion->toArray()
-                );
+                return array_merge($this->valoresBaseConfiguracion(), $configuracion->toArray());
             }
         } catch (\Throwable $error) {
-            // Si la tabla aún no existe, usamos valores base para no romper pagos.
+            //
         }
 
         return $this->valoresBaseConfiguracion();
@@ -57,10 +54,11 @@ class PagoController extends Controller
 
     private function categoriaMetodo(?string $metodo): string
     {
-        $texto = Str::of($metodo ?? '')
-            ->lower()
-            ->ascii()
-            ->toString();
+        $texto = Str::of($metodo ?? '')->lower()->ascii()->toString();
+
+        if (Str::contains($texto, ['mixto', 'combinado', 'efectivo + qr'])) {
+            return 'mixto';
+        }
 
         if (Str::contains($texto, ['efectivo', 'cash'])) {
             return 'efectivo';
@@ -96,6 +94,12 @@ class PagoController extends Controller
                 'total' => 0,
                 'total_texto' => $this->dinero(0, $moneda),
             ],
+            'mixto' => [
+                'label' => 'Mixto',
+                'cantidad' => 0,
+                'total' => 0,
+                'total_texto' => $this->dinero(0, $moneda),
+            ],
             'transferencia' => [
                 'label' => 'Transferencia',
                 'cantidad' => 0,
@@ -122,15 +126,51 @@ class PagoController extends Controller
         $precio = (float) ($cita->precio ?? 0);
         $totalPagado = (float) $cita->pagos()->sum('monto');
 
-        if ($precio <= 0) {
-            $estadoPago = $totalPagado > 0 ? 'pagado' : 'pendiente';
-        } else {
-            $estadoPago = $totalPagado >= $precio ? 'pagado' : 'pendiente';
-        }
+        $estadoPago = $precio <= 0
+            ? ($totalPagado > 0 ? 'pagado' : 'pendiente')
+            : ($totalPagado >= $precio ? 'pagado' : 'pendiente');
 
         $cita->update([
             'estado_pago' => $estadoPago,
         ]);
+    }
+
+    private function calcularMontosPago(Request $request): array
+    {
+        $metodo = $request->input('metodo');
+
+        $montoEfectivo = 0;
+        $montoQr = 0;
+        $montoTransferencia = 0;
+
+        if ($metodo === 'mixto') {
+            $montoEfectivo = (float) ($request->input('monto_efectivo') ?? 0);
+            $montoQr = (float) ($request->input('monto_qr') ?? 0);
+            $montoTransferencia = (float) ($request->input('monto_transferencia') ?? 0);
+
+            $montoTotal = $montoEfectivo + $montoQr + $montoTransferencia;
+        } else {
+            $montoTotal = (float) ($request->input('monto') ?? 0);
+
+            if ($metodo === 'efectivo') {
+                $montoEfectivo = $montoTotal;
+            }
+
+            if ($metodo === 'qr') {
+                $montoQr = $montoTotal;
+            }
+
+            if ($metodo === 'transferencia') {
+                $montoTransferencia = $montoTotal;
+            }
+        }
+
+        return [
+            'monto' => round($montoTotal, 2),
+            'monto_efectivo' => round($montoEfectivo, 2),
+            'monto_qr' => round($montoQr, 2),
+            'monto_transferencia' => round($montoTransferencia, 2),
+        ];
     }
 
     public function index()
@@ -147,21 +187,40 @@ class PagoController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'cita_id' => 'required|exists:citas,id',
-            'monto' => 'required|numeric|min:0.01',
-            'metodo' => 'required|string|max:50',
+            'metodo' => 'required|in:efectivo,qr,transferencia,mixto',
+            'monto' => 'nullable|numeric|min:0',
+            'monto_efectivo' => 'nullable|numeric|min:0',
+            'monto_qr' => 'nullable|numeric|min:0',
+            'monto_transferencia' => 'nullable|numeric|min:0',
         ], [
             'cita_id.required' => 'La cita es obligatoria.',
             'cita_id.exists' => 'La cita seleccionada no existe.',
-            'monto.required' => 'El monto es obligatorio.',
-            'monto.numeric' => 'El monto debe ser numérico.',
-            'monto.min' => 'El monto debe ser mayor a 0.',
             'metodo.required' => 'El método de pago es obligatorio.',
+            'metodo.in' => 'El método de pago no es válido.',
+            'monto.numeric' => 'El monto debe ser numérico.',
+            'monto_efectivo.numeric' => 'El monto en efectivo debe ser numérico.',
+            'monto_qr.numeric' => 'El monto por QR debe ser numérico.',
+            'monto_transferencia.numeric' => 'El monto por transferencia debe ser numérico.',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Datos inválidos',
                 'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $montos = $this->calcularMontosPago($request);
+
+        if ($montos['monto'] <= 0) {
+            return response()->json([
+                'message' => 'El monto total del pago debe ser mayor a 0.',
+            ], 422);
+        }
+
+        if ($request->input('metodo') === 'mixto' && ($montos['monto_efectivo'] <= 0 && $montos['monto_qr'] <= 0 && $montos['monto_transferencia'] <= 0)) {
+            return response()->json([
+                'message' => 'Para un pago mixto debes ingresar al menos un monto en efectivo, QR o transferencia.',
             ], 422);
         }
 
@@ -173,20 +232,29 @@ class PagoController extends Controller
 
         $pago = Pago::create([
             'cita_id' => $cita->id,
-            'monto' => $request->monto,
+            'cliente_id' => $cita->cliente_id,
+            'monto' => $montos['monto'],
+            'monto_efectivo' => $montos['monto_efectivo'],
+            'monto_qr' => $montos['monto_qr'],
+            'monto_transferencia' => $montos['monto_transferencia'],
             'metodo' => $request->metodo,
             'estado' => 'pagado',
             'fecha_pago' => now(),
         ]);
 
+        $this->actualizarEstadoPagoCita($cita);
+
         $cita->update([
-            'estado_pago' => 'pagado',
             'metodo_pago' => $request->metodo,
         ]);
 
         $nombreCliente = $cita->cliente?->nombre ?? 'Cliente sin nombre';
         $servicio = $cita->servicio ?? 'Servicio';
         $montoTexto = $this->dinero($pago->monto, $moneda);
+
+        $detallePago = $request->metodo === 'mixto'
+            ? "Efectivo: {$this->dinero($montos['monto_efectivo'], $moneda)}, QR: {$this->dinero($montos['monto_qr'], $moneda)}, Transferencia: {$this->dinero($montos['monto_transferencia'], $moneda)}"
+            : ucfirst($request->metodo);
 
         Notificacion::create([
             'tipo' => 'pago',
@@ -198,9 +266,13 @@ class PagoController extends Controller
                 'cliente' => $nombreCliente,
                 'servicio' => $servicio,
                 'monto' => (float) $pago->monto,
+                'monto_efectivo' => (float) $pago->monto_efectivo,
+                'monto_qr' => (float) $pago->monto_qr,
+                'monto_transferencia' => (float) $pago->monto_transferencia,
                 'monto_texto' => $montoTexto,
                 'moneda' => $moneda,
                 'metodo' => $pago->metodo,
+                'detalle_pago' => $detallePago,
                 'fecha_pago' => $pago->fecha_pago,
                 'negocio' => $nombreCorto,
             ],
@@ -210,6 +282,7 @@ class PagoController extends Controller
             'message' => 'Pago registrado correctamente',
             'pago' => $pago->load('cita.cliente'),
             'monto_texto' => $montoTexto,
+            'detalle_pago' => $detallePago,
             'configuracion' => $configuracion,
         ], 201);
     }
@@ -286,17 +359,25 @@ class PagoController extends Controller
             ->orderBy('hora', 'asc')
             ->get();
 
-        $totalCobrado = (float) $pagos->sum(function ($pago) {
-            return (float) ($pago->monto ?? 0);
-        });
+        $totalCobrado = (float) $pagos->sum(fn ($pago) => (float) ($pago->monto ?? 0));
 
         $resumenMetodos = $this->resumenMetodosBase($moneda);
 
         foreach ($pagos as $pago) {
             $categoria = $this->categoriaMetodo($pago->metodo);
 
+            if (!isset($resumenMetodos[$categoria])) {
+                $categoria = 'otros';
+            }
+
             $resumenMetodos[$categoria]['cantidad']++;
             $resumenMetodos[$categoria]['total'] += (float) ($pago->monto ?? 0);
+
+            if ($categoria === 'mixto') {
+                $resumenMetodos['efectivo']['total'] += (float) ($pago->monto_efectivo ?? 0);
+                $resumenMetodos['qr']['total'] += (float) ($pago->monto_qr ?? 0);
+                $resumenMetodos['transferencia']['total'] += (float) ($pago->monto_transferencia ?? 0);
+            }
         }
 
         foreach ($resumenMetodos as $clave => $datos) {
@@ -326,9 +407,7 @@ class PagoController extends Controller
             return $totalPagado < $precio;
         })->count();
 
-        $ticketPromedio = $pagos->count() > 0
-            ? $totalCobrado / $pagos->count()
-            : 0;
+        $ticketPromedio = $pagos->count() > 0 ? $totalCobrado / $pagos->count() : 0;
 
         $pagosDetalle = $pagos->map(function ($pago) use ($moneda) {
             $cliente = $pago->cita?->cliente;
@@ -340,6 +419,12 @@ class PagoController extends Controller
                 'hora_pago' => $pago->fecha_pago ? Carbon::parse($pago->fecha_pago)->format('H:i') : '',
                 'monto' => (float) ($pago->monto ?? 0),
                 'monto_texto' => $this->dinero($pago->monto, $moneda),
+                'monto_efectivo' => (float) ($pago->monto_efectivo ?? 0),
+                'monto_efectivo_texto' => $this->dinero($pago->monto_efectivo ?? 0, $moneda),
+                'monto_qr' => (float) ($pago->monto_qr ?? 0),
+                'monto_qr_texto' => $this->dinero($pago->monto_qr ?? 0, $moneda),
+                'monto_transferencia' => (float) ($pago->monto_transferencia ?? 0),
+                'monto_transferencia_texto' => $this->dinero($pago->monto_transferencia ?? 0, $moneda),
                 'metodo' => $pago->metodo,
                 'estado' => $pago->estado,
                 'cita_id' => $pago->cita_id,
@@ -379,23 +464,19 @@ class PagoController extends Controller
             'fecha_texto' => ucfirst($fechaCarbon->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY')),
             'configuracion' => $configuracion,
             'moneda' => $moneda,
-
             'resumen' => [
                 'total_cobrado' => round($totalCobrado, 2),
                 'total_cobrado_texto' => $this->dinero($totalCobrado, $moneda),
                 'cantidad_pagos' => $pagos->count(),
                 'ticket_promedio' => round($ticketPromedio, 2),
                 'ticket_promedio_texto' => $this->dinero($ticketPromedio, $moneda),
-
                 'citas_dia' => $citasDia->count(),
                 'citas_pagadas' => $citasPagadas,
                 'citas_pendientes_pago' => $citasPendientesPago,
-
                 'citas_pendientes' => $citasDia->where('estado', 'pendiente')->count(),
                 'citas_concluidas' => $citasDia->where('estado', 'concluida')->count(),
                 'citas_canceladas' => $citasDia->where('estado', 'cancelada')->count(),
             ],
-
             'metodos' => $resumenMetodos,
             'pagos' => $pagosDetalle,
             'citas' => $citasDetalle,

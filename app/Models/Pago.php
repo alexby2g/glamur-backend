@@ -16,6 +16,9 @@ class Pago extends Model
         'cita_id',
         'cliente_id',
         'monto',
+        'monto_efectivo',
+        'monto_qr',
+        'monto_transferencia',
         'metodo',
         'estado',
         'fecha_pago',
@@ -23,6 +26,9 @@ class Pago extends Model
 
     protected $casts = [
         'monto' => 'decimal:2',
+        'monto_efectivo' => 'decimal:2',
+        'monto_qr' => 'decimal:2',
+        'monto_transferencia' => 'decimal:2',
         'fecha_pago' => 'datetime',
     ];
 
@@ -46,6 +52,25 @@ class Pago extends Model
             'cita_id',
             'empleado_id'
         );
+    }
+
+    public function getDetalleMetodoAttribute()
+    {
+        if ($this->metodo === 'mixto') {
+            return 'Efectivo Bs ' . number_format((float) $this->monto_efectivo, 2) .
+                ' + QR Bs ' . number_format((float) $this->monto_qr, 2) .
+                ' + Transferencia Bs ' . number_format((float) $this->monto_transferencia, 2);
+        }
+
+        if ($this->metodo === 'qr') {
+            return 'QR';
+        }
+
+        if ($this->metodo === 'transferencia') {
+            return 'Transferencia';
+        }
+
+        return 'Efectivo';
     }
 
     public function getComisionEmpleadoAttribute()
