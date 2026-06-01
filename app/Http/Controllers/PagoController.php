@@ -8,6 +8,8 @@ use App\Models\Notificacion;
 use App\Models\Configuracion;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -56,25 +58,11 @@ class PagoController extends Controller
     {
         $texto = Str::of($metodo ?? '')->lower()->ascii()->toString();
 
-        if (Str::contains($texto, ['mixto', 'combinado', 'efectivo + qr'])) {
-            return 'mixto';
-        }
-
-        if (Str::contains($texto, ['efectivo', 'cash'])) {
-            return 'efectivo';
-        }
-
-        if (Str::contains($texto, ['qr', 'q.r'])) {
-            return 'qr';
-        }
-
-        if (Str::contains($texto, ['transferencia', 'transf', 'banco', 'deposito'])) {
-            return 'transferencia';
-        }
-
-        if (Str::contains($texto, ['tarjeta', 'debito', 'credito', 'card'])) {
-            return 'tarjeta';
-        }
+        if (Str::contains($texto, ['mixto', 'combinado', 'efectivo + qr'])) return 'mixto';
+        if (Str::contains($texto, ['efectivo', 'cash'])) return 'efectivo';
+        if (Str::contains($texto, ['qr', 'q.r'])) return 'qr';
+        if (Str::contains($texto, ['transferencia', 'transf', 'banco', 'deposito'])) return 'transferencia';
+        if (Str::contains($texto, ['tarjeta', 'debito', 'credito', 'card'])) return 'tarjeta';
 
         return 'otros';
     }
@@ -82,42 +70,12 @@ class PagoController extends Controller
     private function resumenMetodosBase(string $moneda): array
     {
         return [
-            'efectivo' => [
-                'label' => 'Efectivo',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
-            'qr' => [
-                'label' => 'QR',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
-            'mixto' => [
-                'label' => 'Mixto',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
-            'transferencia' => [
-                'label' => 'Transferencia',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
-            'tarjeta' => [
-                'label' => 'Tarjeta',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
-            'otros' => [
-                'label' => 'Otros',
-                'cantidad' => 0,
-                'total' => 0,
-                'total_texto' => $this->dinero(0, $moneda),
-            ],
+            'efectivo' => ['label' => 'Efectivo', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
+            'qr' => ['label' => 'QR', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
+            'mixto' => ['label' => 'Mixto', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
+            'transferencia' => ['label' => 'Transferencia', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
+            'tarjeta' => ['label' => 'Tarjeta', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
+            'otros' => ['label' => 'Otros', 'cantidad' => 0, 'total' => 0, 'total_texto' => $this->dinero(0, $moneda)],
         ];
     }
 
@@ -147,22 +105,13 @@ class PagoController extends Controller
             $montoEfectivo = (float) ($request->input('monto_efectivo') ?? 0);
             $montoQr = (float) ($request->input('monto_qr') ?? 0);
             $montoTransferencia = (float) ($request->input('monto_transferencia') ?? 0);
-
             $montoTotal = $montoEfectivo + $montoQr + $montoTransferencia;
         } else {
             $montoTotal = (float) ($request->input('monto') ?? 0);
 
-            if ($metodo === 'efectivo') {
-                $montoEfectivo = $montoTotal;
-            }
-
-            if ($metodo === 'qr') {
-                $montoQr = $montoTotal;
-            }
-
-            if ($metodo === 'transferencia') {
-                $montoTransferencia = $montoTotal;
-            }
+            if ($metodo === 'efectivo') $montoEfectivo = $montoTotal;
+            if ($metodo === 'qr') $montoQr = $montoTotal;
+            if ($metodo === 'transferencia') $montoTransferencia = $montoTotal;
         }
 
         return [
@@ -197,10 +146,6 @@ class PagoController extends Controller
             'cita_id.exists' => 'La cita seleccionada no existe.',
             'metodo.required' => 'El método de pago es obligatorio.',
             'metodo.in' => 'El método de pago no es válido.',
-            'monto.numeric' => 'El monto debe ser numérico.',
-            'monto_efectivo.numeric' => 'El monto en efectivo debe ser numérico.',
-            'monto_qr.numeric' => 'El monto por QR debe ser numérico.',
-            'monto_transferencia.numeric' => 'El monto por transferencia debe ser numérico.',
         ]);
 
         if ($validator->fails()) {
@@ -218,73 +163,98 @@ class PagoController extends Controller
             ], 422);
         }
 
-        if ($request->input('metodo') === 'mixto' && ($montos['monto_efectivo'] <= 0 && $montos['monto_qr'] <= 0 && $montos['monto_transferencia'] <= 0)) {
-            return response()->json([
-                'message' => 'Para un pago mixto debes ingresar al menos un monto en efectivo, QR o transferencia.',
-            ], 422);
-        }
-
         $configuracion = $this->obtenerConfiguracionNegocio();
         $moneda = $configuracion['moneda'] ?? 'Bs';
         $nombreCorto = $configuracion['nombre_corto'] ?? 'AUREA Beauty';
 
-        $cita = Cita::with('cliente')->findOrFail($request->cita_id);
+        try {
+            $resultado = DB::transaction(function () use ($request, $montos) {
+                $cita = Cita::with('cliente')->findOrFail($request->cita_id);
 
-        $pago = Pago::create([
-            'cita_id' => $cita->id,
-            'cliente_id' => $cita->cliente_id,
-            'monto' => $montos['monto'],
-            'monto_efectivo' => $montos['monto_efectivo'],
-            'monto_qr' => $montos['monto_qr'],
-            'monto_transferencia' => $montos['monto_transferencia'],
-            'metodo' => $request->metodo,
-            'estado' => 'pagado',
-            'fecha_pago' => now(),
-        ]);
+                $pago = Pago::create([
+                    'cita_id' => $cita->id,
+                    'cliente_id' => $cita->cliente_id,
+                    'monto' => $montos['monto'],
+                    'monto_efectivo' => $montos['monto_efectivo'],
+                    'monto_qr' => $montos['monto_qr'],
+                    'monto_transferencia' => $montos['monto_transferencia'],
+                    'metodo' => $request->metodo,
+                    'estado' => 'pagado',
+                    'fecha_pago' => now(),
+                ]);
 
-        $this->actualizarEstadoPagoCita($cita);
+                $this->actualizarEstadoPagoCita($cita);
 
-        $cita->update([
-            'metodo_pago' => $request->metodo,
-        ]);
+                $cita->update([
+                    'metodo_pago' => $request->metodo,
+                ]);
 
-        $nombreCliente = $cita->cliente?->nombre ?? 'Cliente sin nombre';
-        $servicio = $cita->servicio ?? 'Servicio';
-        $montoTexto = $this->dinero($pago->monto, $moneda);
+                return [
+                    'pago' => $pago->refresh(),
+                    'cita' => $cita->refresh()->load('cliente'),
+                ];
+            });
 
-        $detallePago = $request->metodo === 'mixto'
-            ? "Efectivo: {$this->dinero($montos['monto_efectivo'], $moneda)}, QR: {$this->dinero($montos['monto_qr'], $moneda)}, Transferencia: {$this->dinero($montos['monto_transferencia'], $moneda)}"
-            : ucfirst($request->metodo);
+            $pago = $resultado['pago'];
+            $cita = $resultado['cita'];
 
-        Notificacion::create([
-            'tipo' => 'pago',
-            'titulo' => 'Pago realizado',
-            'mensaje' => "Se registró un pago de {$montoTexto} de {$nombreCliente} en {$nombreCorto}.",
-            'data' => [
-                'pago_id' => $pago->id,
-                'cita_id' => $cita->id,
-                'cliente' => $nombreCliente,
-                'servicio' => $servicio,
-                'monto' => (float) $pago->monto,
-                'monto_efectivo' => (float) $pago->monto_efectivo,
-                'monto_qr' => (float) $pago->monto_qr,
-                'monto_transferencia' => (float) $pago->monto_transferencia,
+            $nombreCliente = $cita->cliente?->nombre ?? 'Cliente sin nombre';
+            $servicio = $cita->servicio ?? 'Servicio';
+            $montoTexto = $this->dinero($pago->monto, $moneda);
+
+            $detallePago = $request->metodo === 'mixto'
+                ? "Efectivo: {$this->dinero($montos['monto_efectivo'], $moneda)}, QR: {$this->dinero($montos['monto_qr'], $moneda)}, Transferencia: {$this->dinero($montos['monto_transferencia'], $moneda)}"
+                : ucfirst($request->metodo);
+
+            try {
+                Notificacion::create([
+                    'tipo' => 'pago',
+                    'titulo' => 'Pago realizado',
+                    'mensaje' => "Se registró un pago de {$montoTexto} de {$nombreCliente} en {$nombreCorto}.",
+                    'data' => [
+                        'pago_id' => $pago->id,
+                        'cita_id' => $cita->id,
+                        'cliente' => $nombreCliente,
+                        'servicio' => $servicio,
+                        'monto' => (float) $pago->monto,
+                        'monto_efectivo' => (float) $pago->monto_efectivo,
+                        'monto_qr' => (float) $pago->monto_qr,
+                        'monto_transferencia' => (float) $pago->monto_transferencia,
+                        'monto_texto' => $montoTexto,
+                        'moneda' => $moneda,
+                        'metodo' => $pago->metodo,
+                        'detalle_pago' => $detallePago,
+                        'fecha_pago' => $pago->fecha_pago ? Carbon::parse($pago->fecha_pago)->toDateTimeString() : null,
+                        'negocio' => $nombreCorto,
+                    ],
+                ]);
+            } catch (\Throwable $error) {
+                Log::error('Error al crear notificación de pago', [
+                    'error' => $error->getMessage(),
+                    'pago_id' => $pago->id ?? null,
+                    'cita_id' => $cita->id ?? null,
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Pago registrado correctamente',
+                'pago' => $pago->load('cita.cliente'),
                 'monto_texto' => $montoTexto,
-                'moneda' => $moneda,
-                'metodo' => $pago->metodo,
                 'detalle_pago' => $detallePago,
-                'fecha_pago' => $pago->fecha_pago,
-                'negocio' => $nombreCorto,
-            ],
-        ]);
+                'configuracion' => $configuracion,
+            ], 201);
 
-        return response()->json([
-            'message' => 'Pago registrado correctamente',
-            'pago' => $pago->load('cita.cliente'),
-            'monto_texto' => $montoTexto,
-            'detalle_pago' => $detallePago,
-            'configuracion' => $configuracion,
-        ], 201);
+        } catch (\Throwable $error) {
+            Log::error('Error al registrar pago', [
+                'error' => $error->getMessage(),
+                'request' => $request->all(),
+            ]);
+
+            return response()->json([
+                'message' => 'No se pudo registrar el pago.',
+                'error' => $error->getMessage(),
+            ], 500);
+        }
     }
 
     public function historial($cita_id)
@@ -326,8 +296,6 @@ class PagoController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'fecha' => 'nullable|date',
-        ], [
-            'fecha.date' => 'La fecha enviada no es válida.',
         ]);
 
         if ($validator->fails()) {
@@ -360,7 +328,6 @@ class PagoController extends Controller
             ->get();
 
         $totalCobrado = (float) $pagos->sum(fn ($pago) => (float) ($pago->monto ?? 0));
-
         $resumenMetodos = $this->resumenMetodosBase($moneda);
 
         foreach ($pagos as $pago) {
@@ -385,79 +352,7 @@ class PagoController extends Controller
             $resumenMetodos[$clave]['total_texto'] = $this->dinero($datos['total'], $moneda);
         }
 
-        $citasPagadas = $citasDia->filter(function ($cita) {
-            $precio = (float) ($cita->precio ?? 0);
-            $totalPagado = (float) $cita->pagos->sum('monto');
-
-            return $totalPagado > 0 && ($precio <= 0 || $totalPagado >= $precio || $cita->estado_pago === 'pagado');
-        })->count();
-
-        $citasPendientesPago = $citasDia->filter(function ($cita) {
-            $precio = (float) ($cita->precio ?? 0);
-            $totalPagado = (float) $cita->pagos->sum('monto');
-
-            if ($cita->estado === 'cancelada') {
-                return false;
-            }
-
-            if ($precio <= 0) {
-                return $totalPagado <= 0;
-            }
-
-            return $totalPagado < $precio;
-        })->count();
-
         $ticketPromedio = $pagos->count() > 0 ? $totalCobrado / $pagos->count() : 0;
-
-        $pagosDetalle = $pagos->map(function ($pago) use ($moneda) {
-            $cliente = $pago->cita?->cliente;
-            $cita = $pago->cita;
-
-            return [
-                'id' => $pago->id,
-                'fecha_pago' => $pago->fecha_pago,
-                'hora_pago' => $pago->fecha_pago ? Carbon::parse($pago->fecha_pago)->format('H:i') : '',
-                'monto' => (float) ($pago->monto ?? 0),
-                'monto_texto' => $this->dinero($pago->monto, $moneda),
-                'monto_efectivo' => (float) ($pago->monto_efectivo ?? 0),
-                'monto_efectivo_texto' => $this->dinero($pago->monto_efectivo ?? 0, $moneda),
-                'monto_qr' => (float) ($pago->monto_qr ?? 0),
-                'monto_qr_texto' => $this->dinero($pago->monto_qr ?? 0, $moneda),
-                'monto_transferencia' => (float) ($pago->monto_transferencia ?? 0),
-                'monto_transferencia_texto' => $this->dinero($pago->monto_transferencia ?? 0, $moneda),
-                'metodo' => $pago->metodo,
-                'estado' => $pago->estado,
-                'cita_id' => $pago->cita_id,
-                'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
-                'telefono' => $cliente?->telefono ?? '',
-                'servicio' => $cita?->servicio ?? 'Sin servicio',
-                'fecha_cita' => $cita?->fecha ?? '',
-                'hora_cita' => $cita?->hora ?? '',
-            ];
-        })->values();
-
-        $citasDetalle = $citasDia->map(function ($cita) use ($moneda) {
-            $precio = (float) ($cita->precio ?? 0);
-            $totalPagado = (float) $cita->pagos->sum('monto');
-            $pendiente = max($precio - $totalPagado, 0);
-
-            return [
-                'id' => $cita->id,
-                'fecha' => $cita->fecha,
-                'hora' => $cita->hora,
-                'cliente' => $cita->cliente?->nombre ?? 'Cliente no registrado',
-                'telefono' => $cita->cliente?->telefono ?? '',
-                'servicio' => $cita->servicio ?? 'Sin servicio',
-                'estado' => $cita->estado ?? 'pendiente',
-                'estado_pago' => $cita->estado_pago ?? 'pendiente',
-                'precio' => $precio,
-                'precio_texto' => $this->dinero($precio, $moneda),
-                'total_pagado' => $totalPagado,
-                'total_pagado_texto' => $this->dinero($totalPagado, $moneda),
-                'pendiente' => $pendiente,
-                'pendiente_texto' => $this->dinero($pendiente, $moneda),
-            ];
-        })->values();
 
         return response()->json([
             'fecha' => $fecha,
@@ -471,15 +366,15 @@ class PagoController extends Controller
                 'ticket_promedio' => round($ticketPromedio, 2),
                 'ticket_promedio_texto' => $this->dinero($ticketPromedio, $moneda),
                 'citas_dia' => $citasDia->count(),
-                'citas_pagadas' => $citasPagadas,
-                'citas_pendientes_pago' => $citasPendientesPago,
+                'citas_pagadas' => $citasDia->where('estado_pago', 'pagado')->count(),
+                'citas_pendientes_pago' => $citasDia->where('estado_pago', 'pendiente')->count(),
                 'citas_pendientes' => $citasDia->where('estado', 'pendiente')->count(),
                 'citas_concluidas' => $citasDia->where('estado', 'concluida')->count(),
                 'citas_canceladas' => $citasDia->where('estado', 'cancelada')->count(),
             ],
             'metodos' => $resumenMetodos,
-            'pagos' => $pagosDetalle,
-            'citas' => $citasDetalle,
+            'pagos' => $pagos,
+            'citas' => $citasDia,
         ]);
     }
 
