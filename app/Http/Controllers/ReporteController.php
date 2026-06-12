@@ -60,6 +60,10 @@ class ReporteController extends Controller
             ->ascii()
             ->toString();
 
+        if (Str::contains($texto, ['mixto', 'combinado', 'efectivo + qr'])) {
+            return 'mixto';
+        }
+
         if (Str::contains($texto, ['efectivo', 'cash'])) {
             return 'efectivo';
         }
@@ -96,6 +100,12 @@ class ReporteController extends Controller
             ],
             'transferencia' => [
                 'label' => 'Transferencia',
+                'cantidad' => 0,
+                'total' => 0,
+                'total_texto' => $this->dinero(0, $moneda),
+            ],
+            'mixto' => [
+                'label' => 'Mixto',
                 'cantidad' => 0,
                 'total' => 0,
                 'total_texto' => $this->dinero(0, $moneda),
@@ -466,28 +476,97 @@ class ReporteController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
 
-        $pagos = Pago::with(['cita.cliente', 'cita.empleado'])
+        $pagosReales = Pago::with(['cliente', 'cita.cliente', 'cita.empleado'])
             ->whereDate('fecha_pago', $fecha)
-            ->orderBy('fecha_pago', 'desc')
-            ->orderBy('id', 'desc')
+            ->orderBy('fecha_pago', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
         $citas = Cita::with(['cliente', 'empleado', 'pagos'])
             ->whereDate('fecha', $fecha)
             ->orderBy('hora', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
-        $totalCobrado = (float) $pagos->sum(function ($pago) {
-            return (float) ($pago->monto ?? 0);
+        $pagosDetalle = collect();
+
+        foreach ($pagosReales as $pago) {
+            $cita = $pago->cita;
+            $cliente = $pago->cliente ?: $cita?->cliente;
+            $monto = (float) ($pago->monto ?? 0);
+            $fechaPago = $pago->fecha_pago ? Carbon::parse($pago->fecha_pago) : null;
+
+            $pagosDetalle->push([
+                'id' => 'pago-' . $pago->id,
+                'pago_id' => $pago->id,
+                'cita_id' => $pago->cita_id,
+                'fecha_pago' => $fechaPago?->toDateTimeString(),
+                'hora_pago' => $fechaPago ? $fechaPago->format('H:i') : ($cita?->hora ? substr((string) $cita->hora, 0, 5) : ''),
+                'monto' => round($monto, 2),
+                'monto_texto' => $this->dinero($monto, $moneda),
+                'metodo' => $pago->metodo ?: ($cita?->metodo_pago ?: 'otros'),
+                'estado' => $pago->estado ?? 'pagado',
+                'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
+                'telefono' => $cliente?->telefono ?? '',
+                'empleado' => $cita?->empleado?->nombre ?? 'Sin empleado',
+                'servicio' => $cita?->servicio ?? 'Sin servicio',
+                'fecha_cita' => $cita?->fecha ?? '',
+                'hora_cita' => $cita?->hora ?? '',
+                'origen' => 'pago',
+            ]);
+        }
+
+        foreach ($citas as $cita) {
+            $precio = (float) ($cita->precio ?? 0);
+            $totalPagado = (float) $cita->pagos->sum('monto');
+
+            if ($cita->estado_pago === 'pagado' && $totalPagado <= 0 && $precio > 0) {
+                $cliente = $cita->cliente;
+
+                $pagosDetalle->push([
+                    'id' => 'cita-pagada-' . $cita->id,
+                    'pago_id' => null,
+                    'cita_id' => $cita->id,
+                    'fecha_pago' => $fecha . ' ' . substr((string) ($cita->hora ?: '00:00'), 0, 5) . ':00',
+                    'hora_pago' => $cita->hora ? substr((string) $cita->hora, 0, 5) : '',
+                    'monto' => round($precio, 2),
+                    'monto_texto' => $this->dinero($precio, $moneda),
+                    'metodo' => $cita->metodo_pago ?: 'otros',
+                    'estado' => 'pagado',
+                    'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
+                    'telefono' => $cliente?->telefono ?? '',
+                    'empleado' => $cita->empleado?->nombre ?? 'Sin empleado',
+                    'servicio' => $cita->servicio ?? 'Sin servicio',
+                    'fecha_cita' => $cita->fecha ?? '',
+                    'hora_cita' => $cita->hora ?? '',
+                    'origen' => 'cita_pagada',
+                    'observacion' => 'Cita marcada como pagada sin registro individual de pago.',
+                ]);
+            }
+        }
+
+        $pagosDetalle = $pagosDetalle
+            ->sortBy([
+                ['hora_pago', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        $totalCobrado = (float) $pagosDetalle->sum(function ($pago) {
+            return (float) ($pago['monto'] ?? 0);
         });
 
         $resumenMetodos = $this->resumenMetodosBase($moneda);
 
-        foreach ($pagos as $pago) {
-            $categoria = $this->categoriaMetodo($pago->metodo);
+        foreach ($pagosDetalle as $pago) {
+            $categoria = $this->categoriaMetodo($pago['metodo'] ?? 'otros');
+
+            if (!isset($resumenMetodos[$categoria])) {
+                $categoria = 'otros';
+            }
 
             $resumenMetodos[$categoria]['cantidad']++;
-            $resumenMetodos[$categoria]['total'] += (float) ($pago->monto ?? 0);
+            $resumenMetodos[$categoria]['total'] += (float) ($pago['monto'] ?? 0);
         }
 
         foreach ($resumenMetodos as $clave => $datosMetodo) {
@@ -495,56 +574,14 @@ class ReporteController extends Controller
             $resumenMetodos[$clave]['total_texto'] = $this->dinero($datosMetodo['total'], $moneda);
         }
 
-        $citasPagadas = $citas->filter(function ($cita) {
-            $precio = (float) ($cita->precio ?? 0);
-            $totalPagado = (float) $cita->pagos->sum('monto');
-
-            return $totalPagado > 0 && ($precio <= 0 || $totalPagado >= $precio || $cita->estado_pago === 'pagado');
-        })->count();
-
-        $citasPendientesPago = $citas->filter(function ($cita) {
-            $precio = (float) ($cita->precio ?? 0);
-            $totalPagado = (float) $cita->pagos->sum('monto');
-
-            if ($cita->estado === 'cancelada') {
-                return false;
-            }
-
-            if ($precio <= 0) {
-                return $totalPagado <= 0;
-            }
-
-            return $totalPagado < $precio;
-        })->count();
-
-        $ticketPromedio = $pagos->count() > 0
-            ? $totalCobrado / $pagos->count()
-            : 0;
-
-        $pagosDetalle = $pagos->map(function ($pago) use ($moneda) {
-            $cliente = $pago->cita?->cliente;
-            $cita = $pago->cita;
-
-            return [
-                'id' => $pago->id,
-                'fecha_pago' => $pago->fecha_pago,
-                'hora_pago' => $pago->fecha_pago ? Carbon::parse($pago->fecha_pago)->format('H:i') : '',
-                'monto' => (float) ($pago->monto ?? 0),
-                'monto_texto' => $this->dinero($pago->monto, $moneda),
-                'metodo' => $pago->metodo,
-                'estado' => $pago->estado,
-                'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
-                'telefono' => $cliente?->telefono ?? '',
-                'empleado' => $cita?->empleado?->nombre ?? 'Sin empleado',
-                'servicio' => $cita?->servicio ?? 'Sin servicio',
-                'fecha_cita' => $cita?->fecha ?? '',
-                'hora_cita' => $cita?->hora ?? '',
-            ];
-        })->values();
-
         $citasDetalle = $citas->map(function ($cita) use ($moneda) {
             $precio = (float) ($cita->precio ?? 0);
             $totalPagado = (float) $cita->pagos->sum('monto');
+
+            if ($cita->estado_pago === 'pagado' && $totalPagado <= 0) {
+                $totalPagado = $precio;
+            }
+
             $pendiente = max($precio - $totalPagado, 0);
 
             return [
@@ -557,14 +594,19 @@ class ReporteController extends Controller
                 'servicio' => $cita->servicio ?? 'Sin servicio',
                 'estado' => $cita->estado ?? 'pendiente',
                 'estado_pago' => $cita->estado_pago ?? 'pendiente',
-                'precio' => $precio,
+                'precio' => round($precio, 2),
                 'precio_texto' => $this->dinero($precio, $moneda),
-                'total_pagado' => $totalPagado,
+                'total_pagado' => round($totalPagado, 2),
                 'total_pagado_texto' => $this->dinero($totalPagado, $moneda),
-                'pendiente' => $pendiente,
+                'pendiente' => round($pendiente, 2),
                 'pendiente_texto' => $this->dinero($pendiente, $moneda),
             ];
         })->values();
+
+        $cantidadPagos = $pagosDetalle->count();
+        $ticketPromedio = $cantidadPagos > 0
+            ? $totalCobrado / $cantidadPagos
+            : 0;
 
         $datos = [
             'titulo' => 'Caja diaria ' . ($configuracion['nombre_corto'] ?: 'AUREA Beauty'),
@@ -585,13 +627,13 @@ class ReporteController extends Controller
 
             'total_cobrado' => round($totalCobrado, 2),
             'total_cobrado_texto' => $this->dinero($totalCobrado, $moneda),
-            'cantidad_pagos' => $pagos->count(),
+            'cantidad_pagos' => $cantidadPagos,
             'ticket_promedio' => round($ticketPromedio, 2),
             'ticket_promedio_texto' => $this->dinero($ticketPromedio, $moneda),
 
             'citas_dia' => $citas->count(),
-            'citas_pagadas' => $citasPagadas,
-            'citas_pendientes_pago' => $citasPendientesPago,
+            'citas_pagadas' => $citas->where('estado_pago', 'pagado')->count(),
+            'citas_pendientes_pago' => $citas->where('estado_pago', 'pendiente')->count(),
             'citas_pendientes' => $citas->where('estado', 'pendiente')->count(),
             'citas_concluidas' => $citas->where('estado', 'concluida')->count(),
             'citas_canceladas' => $citas->where('estado', 'cancelada')->count(),
@@ -609,4 +651,5 @@ class ReporteController extends Controller
 
         return $pdf->download($nombreArchivo);
     }
+
 }

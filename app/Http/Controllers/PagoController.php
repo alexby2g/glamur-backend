@@ -316,34 +316,140 @@ class PagoController extends Controller
 
         $fechaCarbon = Carbon::parse($fecha);
 
-        $pagos = Pago::with('cita.cliente')
+        $pagosReales = Pago::with(['cliente', 'cita.cliente'])
             ->whereDate('fecha_pago', $fecha)
-            ->orderBy('fecha_pago', 'desc')
-            ->orderBy('id', 'desc')
+            ->orderBy('fecha_pago', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
         $citasDia = Cita::with(['cliente', 'pagos'])
             ->whereDate('fecha', $fecha)
             ->orderBy('hora', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
-        $totalCobrado = (float) $pagos->sum(fn ($pago) => (float) ($pago->monto ?? 0));
+        $pagosNormalizados = collect();
+
+        foreach ($pagosReales as $pago) {
+            $cita = $pago->cita;
+            $cliente = $pago->cliente ?: $cita?->cliente;
+            $monto = (float) ($pago->monto ?? 0);
+            $metodo = $pago->metodo ?: ($cita?->metodo_pago ?: 'otros');
+            $fechaPago = $pago->fecha_pago ? Carbon::parse($pago->fecha_pago) : null;
+
+            $pagosNormalizados->push([
+                'id' => 'pago-' . $pago->id,
+                'pago_id' => $pago->id,
+                'cita_id' => $pago->cita_id,
+                'cliente_id' => $cliente?->id,
+                'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
+                'telefono' => $cliente?->telefono ?? '',
+                'servicio' => $cita?->servicio ?? 'Servicio no registrado',
+                'metodo' => $metodo,
+                'metodo_texto' => ucfirst(str_replace('_', ' ', $metodo)),
+                'monto' => round($monto, 2),
+                'monto_texto' => $this->dinero($monto, $moneda),
+                'monto_efectivo' => round((float) ($pago->monto_efectivo ?? 0), 2),
+                'monto_qr' => round((float) ($pago->monto_qr ?? 0), 2),
+                'monto_transferencia' => round((float) ($pago->monto_transferencia ?? 0), 2),
+                'estado' => $pago->estado ?? 'pagado',
+                'fecha_pago' => $fechaPago?->toDateTimeString(),
+                'hora_pago' => $fechaPago ? $fechaPago->format('H:i') : ($cita?->hora ? substr((string) $cita->hora, 0, 5) : ''),
+                'origen' => 'pago',
+                'vinculado' => true,
+            ]);
+        }
+
+        foreach ($citasDia as $cita) {
+            $totalPagadoCita = (float) $cita->pagos->sum('monto');
+            $precioCita = (float) ($cita->precio ?? 0);
+
+            if ($cita->estado_pago === 'pagado' && $totalPagadoCita <= 0 && $precioCita > 0) {
+                $cliente = $cita->cliente;
+                $metodo = $cita->metodo_pago ?: 'otros';
+
+                $pagosNormalizados->push([
+                    'id' => 'cita-pagada-' . $cita->id,
+                    'pago_id' => null,
+                    'cita_id' => $cita->id,
+                    'cliente_id' => $cliente?->id,
+                    'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
+                    'telefono' => $cliente?->telefono ?? '',
+                    'servicio' => $cita->servicio ?? 'Servicio no registrado',
+                    'metodo' => $metodo,
+                    'metodo_texto' => ucfirst(str_replace('_', ' ', $metodo)),
+                    'monto' => round($precioCita, 2),
+                    'monto_texto' => $this->dinero($precioCita, $moneda),
+                    'monto_efectivo' => $metodo === 'efectivo' ? round($precioCita, 2) : 0,
+                    'monto_qr' => $metodo === 'qr' ? round($precioCita, 2) : 0,
+                    'monto_transferencia' => $metodo === 'transferencia' ? round($precioCita, 2) : 0,
+                    'estado' => 'pagado',
+                    'fecha_pago' => $fecha . ' ' . substr((string) ($cita->hora ?: '00:00'), 0, 5) . ':00',
+                    'hora_pago' => $cita->hora ? substr((string) $cita->hora, 0, 5) : '',
+                    'origen' => 'cita_pagada',
+                    'vinculado' => false,
+                    'observacion' => 'Cita marcada como pagada sin registro individual de pago.',
+                ]);
+            }
+        }
+
+        $pagosNormalizados = $pagosNormalizados
+            ->sortBy([
+                ['hora_pago', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        $citasNormalizadas = $citasDia->map(function ($cita) use ($moneda) {
+            $cliente = $cita->cliente;
+            $precio = (float) ($cita->precio ?? 0);
+            $pagado = (float) $cita->pagos->sum('monto');
+
+            if ($cita->estado_pago === 'pagado' && $pagado <= 0) {
+                $pagado = $precio;
+            }
+
+            $pendiente = max($precio - $pagado, 0);
+
+            return [
+                'id' => $cita->id,
+                'cita_id' => $cita->id,
+                'cliente_id' => $cliente?->id,
+                'cliente' => $cliente?->nombre ?? 'Cliente no registrado',
+                'telefono' => $cliente?->telefono ?? '',
+                'servicio' => $cita->servicio ?? 'Servicio no registrado',
+                'fecha' => $cita->fecha,
+                'hora' => $cita->hora ? substr((string) $cita->hora, 0, 5) : '',
+                'estado' => $cita->estado ?? 'pendiente',
+                'estado_pago' => $cita->estado_pago ?? 'pendiente',
+                'metodo_pago' => $cita->metodo_pago,
+                'precio' => round($precio, 2),
+                'precio_texto' => $this->dinero($precio, $moneda),
+                'pagado' => round($pagado, 2),
+                'pagado_texto' => $this->dinero($pagado, $moneda),
+                'pendiente' => round($pendiente, 2),
+                'pendiente_texto' => $this->dinero($pendiente, $moneda),
+                'pagos_registrados' => $cita->pagos->count(),
+            ];
+        })->values();
+
+        $totalCobrado = (float) $pagosNormalizados->sum(fn ($pago) => (float) ($pago['monto'] ?? 0));
         $resumenMetodos = $this->resumenMetodosBase($moneda);
 
-        foreach ($pagos as $pago) {
-            $categoria = $this->categoriaMetodo($pago->metodo);
+        foreach ($pagosNormalizados as $pago) {
+            $categoria = $this->categoriaMetodo($pago['metodo'] ?? 'otros');
 
-            if (!isset($resumenMetodos[$categoria])) {
-                $categoria = 'otros';
+            if (!isset($resumenMetodos[$categoria]) || $categoria === 'mixto') {
+                $categoria = isset($resumenMetodos[$categoria]) ? $categoria : 'otros';
             }
 
             $resumenMetodos[$categoria]['cantidad']++;
-            $resumenMetodos[$categoria]['total'] += (float) ($pago->monto ?? 0);
+            $resumenMetodos[$categoria]['total'] += (float) ($pago['monto'] ?? 0);
 
-            if ($categoria === 'mixto') {
-                $resumenMetodos['efectivo']['total'] += (float) ($pago->monto_efectivo ?? 0);
-                $resumenMetodos['qr']['total'] += (float) ($pago->monto_qr ?? 0);
-                $resumenMetodos['transferencia']['total'] += (float) ($pago->monto_transferencia ?? 0);
+            if (($pago['metodo'] ?? '') === 'mixto') {
+                $resumenMetodos['efectivo']['total'] += (float) ($pago['monto_efectivo'] ?? 0);
+                $resumenMetodos['qr']['total'] += (float) ($pago['monto_qr'] ?? 0);
+                $resumenMetodos['transferencia']['total'] += (float) ($pago['monto_transferencia'] ?? 0);
             }
         }
 
@@ -352,7 +458,8 @@ class PagoController extends Controller
             $resumenMetodos[$clave]['total_texto'] = $this->dinero($datos['total'], $moneda);
         }
 
-        $ticketPromedio = $pagos->count() > 0 ? $totalCobrado / $pagos->count() : 0;
+        $cantidadPagos = $pagosNormalizados->count();
+        $ticketPromedio = $cantidadPagos > 0 ? $totalCobrado / $cantidadPagos : 0;
 
         return response()->json([
             'fecha' => $fecha,
@@ -362,7 +469,7 @@ class PagoController extends Controller
             'resumen' => [
                 'total_cobrado' => round($totalCobrado, 2),
                 'total_cobrado_texto' => $this->dinero($totalCobrado, $moneda),
-                'cantidad_pagos' => $pagos->count(),
+                'cantidad_pagos' => $cantidadPagos,
                 'ticket_promedio' => round($ticketPromedio, 2),
                 'ticket_promedio_texto' => $this->dinero($ticketPromedio, $moneda),
                 'citas_dia' => $citasDia->count(),
@@ -373,8 +480,8 @@ class PagoController extends Controller
                 'citas_canceladas' => $citasDia->where('estado', 'cancelada')->count(),
             ],
             'metodos' => $resumenMetodos,
-            'pagos' => $pagos,
-            'citas' => $citasDia,
+            'pagos' => $pagosNormalizados,
+            'citas' => $citasNormalizadas,
         ]);
     }
 
