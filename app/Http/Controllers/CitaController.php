@@ -297,7 +297,7 @@ class CitaController extends Controller
 
     public function dashboard()
     {
-        $hoy = Carbon::now();
+        $hoy = Carbon::now('America/La_Paz');
         $inicioMes = $hoy->copy()->startOfMonth();
         $finMes = $hoy->copy()->endOfMonth();
         $inicioAnio = $hoy->copy()->startOfYear();
