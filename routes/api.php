@@ -11,6 +11,7 @@ use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\SyncController;
 use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Middleware\VerificarRolSistema;
 
@@ -32,6 +33,10 @@ Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
 Route::middleware([VerificarTokenSistema::class])->group(function () {
+
+    // Sincronización de la aplicación Flutter (en línea / sin internet)
+    Route::get('/sync/pull', [SyncController::class, 'pull']);
+    Route::post('/sync/push', [SyncController::class, 'push']);
 
     // =====================================================
     // 🔐 SESIÓN / PERFIL

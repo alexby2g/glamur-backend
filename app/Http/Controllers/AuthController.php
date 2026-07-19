@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\UsuarioSistema;
+use App\Models\UsuarioSistemaToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -33,13 +34,28 @@ class AuthController extends Controller
 
     private function obtenerUsuarioPorToken(Request $request)
     {
-        $token = $this->obtenerToken($request);
+        return $this->obtenerSesionPorToken($request)['usuario'] ?? null;
+    }
 
-        if (!$token) {
+    private function obtenerSesionPorToken(Request $request): ?array
+    {
+        $token = $this->obtenerToken($request);
+        if (!$token) return null;
+
+        $usuario = UsuarioSistema::where('token', $token)->first();
+        if ($usuario) return ['usuario' => $usuario, 'token_movil' => null];
+
+        $tokenMovil = UsuarioSistemaToken::with('usuario')
+            ->where('token_hash', hash('sha256', $token))
+            ->first();
+
+        if (!$tokenMovil) return null;
+        if ($tokenMovil->expires_at && $tokenMovil->expires_at->isPast()) {
+            $tokenMovil->delete();
             return null;
         }
 
-        return UsuarioSistema::where('token', $token)->first();
+        return ['usuario' => $tokenMovil->usuario, 'token_movil' => $tokenMovil];
     }
 
     private function respuestaUsuario(UsuarioSistema $usuario): array
@@ -135,6 +151,8 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'usuario' => 'required|string',
             'password' => 'required|string',
+            'device_id' => 'nullable|uuid',
+            'device_name' => 'nullable|string|max:100',
         ], [
             'usuario.required' => 'El usuario es obligatorio.',
             'password.required' => 'La contraseña es obligatoria.',
@@ -165,10 +183,27 @@ class AuthController extends Controller
 
         $token = Str::random(80);
 
-        $usuario->update([
-            'token' => $token,
-            'ultimo_acceso' => now(),
-        ]);
+        if ($request->filled('device_id')) {
+            UsuarioSistemaToken::updateOrCreate(
+                [
+                    'usuario_sistema_id' => $usuario->id,
+                    'device_id' => $request->device_id,
+                ],
+                [
+                    'device_name' => $request->input('device_name', 'Aplicación móvil'),
+                    'token_hash' => hash('sha256', $token),
+                    'last_used_at' => now(),
+                    'expires_at' => null,
+                ]
+            );
+            $usuario->update(['ultimo_acceso' => now()]);
+        } else {
+            // Compatibilidad total con el frontend Quasar existente.
+            $usuario->update([
+                'token' => $token,
+                'ultimo_acceso' => now(),
+            ]);
+        }
 
         $usuario = $usuario->fresh();
 
@@ -192,7 +227,8 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $usuario = UsuarioSistema::where('token', $token)->first();
+        $sesion = $this->obtenerSesionPorToken($request);
+        $usuario = $sesion['usuario'] ?? null;
 
         if (!$usuario) {
             return response()->json([
@@ -309,7 +345,8 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $usuario = UsuarioSistema::where('token', $token)->first();
+        $sesion = $this->obtenerSesionPorToken($request);
+        $usuario = $sesion['usuario'] ?? null;
 
         if (!$usuario) {
             return response()->json([
@@ -317,9 +354,11 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $usuario->update([
-            'token' => null
-        ]);
+        if (!empty($sesion['token_movil'])) {
+            $sesion['token_movil']->delete();
+        } else {
+            $usuario->update(['token' => null]);
+        }
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.'

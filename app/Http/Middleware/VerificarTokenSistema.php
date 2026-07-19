@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\UsuarioSistema;
+use App\Models\UsuarioSistemaToken;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,6 +40,20 @@ class VerificarTokenSistema
             ->where('token', $token)
             ->first();
 
+        $tokenMovil = null;
+        if (!$usuario) {
+            $tokenMovil = UsuarioSistemaToken::with('usuario.empleado')
+                ->where('token_hash', hash('sha256', $token))
+                ->first();
+
+            if ($tokenMovil && $tokenMovil->expires_at && $tokenMovil->expires_at->isPast()) {
+                $tokenMovil->delete();
+                $tokenMovil = null;
+            }
+
+            $usuario = $tokenMovil?->usuario;
+        }
+
         if (!$usuario) {
             return response()->json([
                 'message' => 'Sesión inválida o expirada.'
@@ -72,6 +87,11 @@ class VerificarTokenSistema
         $request->attributes->set('usuario_empleado_id', $usuario->empleado_id);
         $request->attributes->set('usuario_es_admin', $rol === 'admin');
         $request->attributes->set('usuario_es_empleado', $rol === 'empleado');
+        $request->attributes->set('usuario_token_movil', $tokenMovil);
+
+        if ($tokenMovil) {
+            $tokenMovil->forceFill(['last_used_at' => now()])->save();
+        }
 
         return $next($request);
     }

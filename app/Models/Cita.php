@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Concerns\HasSyncUuid;
 
 class Cita extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasSyncUuid;
 
     protected $fillable = [
+        'uuid',
         'cliente_id',
         'empleado_id',
         'fecha',

@@ -7,14 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Cita;
 use App\Models\Pago;
+use App\Models\Concerns\HasSyncUuid;
 
 class Cliente extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasSyncUuid;
 
     protected $table = 'clientes';
 
     protected $fillable = [
+        'uuid',
         'nombre',
         'telefono',
         'email',

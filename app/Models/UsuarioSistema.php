@@ -39,6 +39,11 @@ class UsuarioSistema extends Model
         return $this->belongsTo(\App\Models\Empleado::class)->withTrashed();
     }
 
+    public function tokensMoviles()
+    {
+        return $this->hasMany(UsuarioSistemaToken::class, 'usuario_sistema_id');
+    }
+
     public function setPasswordAttribute($value)
     {
         if ($value && Hash::needsRehash($value)) {

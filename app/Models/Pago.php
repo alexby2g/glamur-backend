@@ -5,14 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Concerns\HasSyncUuid;
 
 class Pago extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasSyncUuid;
 
     protected $table = 'pagos';
 
     protected $fillable = [
+        'uuid',
         'cita_id',
         'cliente_id',
         'monto',
