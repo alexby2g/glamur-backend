@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditoriaController;
 use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\SyncController;
 use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Middleware\VerificarRolSistema;
+use App\Http\Middleware\RegistrarAuditoria;
 
 /*
 |--------------------------------------------------------------------------
