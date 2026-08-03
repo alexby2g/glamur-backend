@@ -64,7 +64,7 @@ class AuthController extends Controller
             'id' => $usuario->id,
             'nombre' => $usuario->nombre,
             'usuario' => $usuario->usuario,
-            'rol' => $this->normalizarRol($usuario->rol ?? 'admin'),
+            'rol' => $this->normalizarRol($usuario->rol ?? 'empleado'),
             'empleado_id' => $usuario->empleado_id ?? null,
             'foto_perfil' => $usuario->foto_perfil ?? null,
             'activo' => (bool) $usuario->activo,
