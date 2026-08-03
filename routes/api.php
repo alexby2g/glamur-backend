@@ -24,9 +24,10 @@ use App\Http\Middleware\VerificarRolSistema;
 // =====================================================
 // 🔐 AUTENTICACIÓN PÚBLICA
 // =====================================================
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
-Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']);
+// Limita intentos por IP para reducir ataques de fuerza bruta y abuso.
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:3,10');
+Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica'])->middleware('throttle:60,1');
 
 
 // =====================================================
@@ -161,7 +162,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
         Route::put('/historial/restaurar-todo', [HistorialController::class, 'restaurarTodo']);
 
         Route::delete('/historial/clientes/{id}/eliminar', [HistorialController::class, 'eliminarClienteDefinitivo']);
-        Route::delete('/historial/citas/{id}/eliminar', [HistorialController::class, 'eliminarCitaDefinitiva']);
+        Route::delete('/historial/citas/{id}/eliminar', [HistorialController::class, 'eliminarCitaDefinitivo']);
         Route::delete('/historial/pagos/{id}/eliminar', [HistorialController::class, 'eliminarPagoDefinitivo']);
 
         Route::delete('/historial/limpiar', [HistorialController::class, 'limpiarHistorial']);
