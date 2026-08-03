@@ -33,7 +33,7 @@ Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']
 // =====================================================
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
-Route::middleware([VerificarTokenSistema::class])->group(function () {
+Route::middleware([VerificarTokenSistema::class, RegistrarAuditoria::class])->group(function () {
 
     // Sincronización de la aplicación Flutter (en línea / sin internet)
     Route::get('/sync/pull', [SyncController::class, 'pull']);
@@ -81,6 +81,9 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
         // 📊 DASHBOARD
         // =====================================================
         Route::get('/dashboard', [CitaController::class, 'dashboard']);
+
+        // Bitácora protegida: solo el administrador puede consultarla.
+        Route::get('/auditorias', [AuditoriaController::class, 'index']);
 
 
         // =====================================================
