@@ -29,7 +29,7 @@ class AuthController extends Controller
 
         return in_array($rol, $this->rolesPermitidos, true)
             ? $rol
-            : 'admin';
+            : 'empleado';
     }
 
     private function obtenerUsuarioPorToken(Request $request)
@@ -64,12 +64,39 @@ class AuthController extends Controller
             'id' => $usuario->id,
             'nombre' => $usuario->nombre,
             'usuario' => $usuario->usuario,
-            'rol' => $this->normalizarRol($usuario->rol ?? 'admin'),
+            'rol' => $this->normalizarRol($usuario->rol ?? 'empleado'),
             'empleado_id' => $usuario->empleado_id ?? null,
             'foto_perfil' => $usuario->foto_perfil ?? null,
             'activo' => (bool) $usuario->activo,
             'ultimo_acceso' => $usuario->ultimo_acceso,
         ];
+    }
+
+    private function crearSesion(UsuarioSistema $usuario, Request $request): string
+    {
+        $token = Str::random(80);
+        $diasVigencia = max(1, min((int) env('SESSION_LIFETIME_DAYS', 30), 90));
+
+        UsuarioSistemaToken::create([
+            'usuario_sistema_id' => $usuario->id,
+            'device_id' => $request->filled('device_id')
+                ? $request->device_id
+                : (string) Str::uuid(),
+            'device_name' => $request->input(
+                'device_name',
+                $request->filled('device_id') ? 'Aplicación móvil' : 'Navegador web'
+            ),
+            'token_hash' => hash('sha256', $token),
+            'last_used_at' => now(),
+            'expires_at' => now()->addDays($diasVigencia),
+        ]);
+
+        // Revoca el token web antiguo guardado en texto plano.
+        if ($usuario->token) {
+            $usuario->forceFill(['token' => null])->save();
+        }
+
+        return $token;
     }
 
     private function validarFotoPerfil(?string $foto): bool
@@ -122,8 +149,6 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = Str::random(80);
-
         $usuario = UsuarioSistema::create([
             'nombre' => trim($request->nombre),
             'usuario' => strtolower(trim($request->usuario)),
@@ -131,10 +156,12 @@ class AuthController extends Controller
             'rol' => 'admin',
             'empleado_id' => null,
             'foto_perfil' => null,
-            'token' => $token,
+            'token' => null,
             'activo' => true,
             'ultimo_acceso' => now(),
         ]);
+
+        $token = $this->crearSesion($usuario, $request);
 
         return response()->json([
             'message' => 'Administrador registrado correctamente.',
@@ -181,30 +208,16 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = Str::random(80);
-
+        // Cada inicio crea una sesión independiente, almacenada solo como hash
+        // y con vencimiento. Esto permite revocar un dispositivo sin afectar otros.
         if ($request->filled('device_id')) {
-            UsuarioSistemaToken::updateOrCreate(
-                [
-                    'usuario_sistema_id' => $usuario->id,
-                    'device_id' => $request->device_id,
-                ],
-                [
-                    'device_name' => $request->input('device_name', 'Aplicación móvil'),
-                    'token_hash' => hash('sha256', $token),
-                    'last_used_at' => now(),
-                    'expires_at' => null,
-                ]
-            );
-            $usuario->update(['ultimo_acceso' => now()]);
-        } else {
-            // Compatibilidad total con el frontend Quasar existente.
-            $usuario->update([
-                'token' => $token,
-                'ultimo_acceso' => now(),
-            ]);
+            UsuarioSistemaToken::where('usuario_sistema_id', $usuario->id)
+                ->where('device_id', $request->device_id)
+                ->delete();
         }
 
+        $token = $this->crearSesion($usuario, $request);
+        $usuario->update(['ultimo_acceso' => now()]);
         $usuario = $usuario->fresh();
 
         return response()->json([
@@ -329,6 +342,27 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Foto de perfil eliminada correctamente.',
             'usuario' => $this->respuestaUsuario($usuario),
+        ]);
+    }
+
+    // =====================================================
+    // 🚪 CERRAR TODAS LAS SESIONES
+    // =====================================================
+    public function logoutAll(Request $request)
+    {
+        $usuario = $this->obtenerUsuarioPorToken($request);
+
+        if (!$usuario) {
+            return response()->json([
+                'message' => 'Sesión inválida o expirada.'
+            ], 401);
+        }
+
+        $usuario->tokensMoviles()->delete();
+        $usuario->forceFill(['token' => null])->save();
+
+        return response()->json([
+            'message' => 'Todas las sesiones fueron cerradas correctamente.'
         ]);
     }
 

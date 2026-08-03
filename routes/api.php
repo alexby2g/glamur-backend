@@ -44,6 +44,7 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
     // =====================================================
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/logout-all', [AuthController::class, 'logoutAll'])->middleware('throttle:3,1');
 
     // Foto de perfil del usuario autenticado
     Route::put('/perfil/foto', [AuthController::class, 'actualizarFotoPerfil']);
