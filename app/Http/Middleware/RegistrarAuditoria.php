@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use App\Models\Auditoria;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -69,24 +68,31 @@ class RegistrarAuditoria
 
     private function datosSeguros(Request $request): ?array
     {
-        $datos = Arr::except($request->all(), $this->camposSensibles);
+        $datos = $this->filtrarYLimitar($request->all());
 
-        return empty($datos) ? null : $this->limitar($datos);
+        return empty($datos) ? null : $datos;
     }
 
-    private function limitar(array $datos): array
+    private function filtrarYLimitar(array $datos): array
     {
-        return collect($datos)->map(function ($valor) {
+        $resultado = [];
+
+        foreach ($datos as $clave => $valor) {
+            if (in_array(strtolower((string) $clave), $this->camposSensibles, true)) {
+                continue;
+            }
+
             if (is_array($valor)) {
-                return $this->limitar($valor);
+                $resultado[$clave] = $this->filtrarYLimitar($valor);
+                continue;
             }
 
-            if (is_string($valor) && mb_strlen($valor) > 500) {
-                return mb_substr($valor, 0, 500) . '…';
-            }
+            $resultado[$clave] = is_string($valor) && mb_strlen($valor) > 500
+                ? mb_substr($valor, 0, 500) . '…'
+                : $valor;
+        }
 
-            return $valor;
-        })->all();
+        return $resultado;
     }
 
     private function accion(Request $request): string
