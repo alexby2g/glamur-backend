@@ -21,7 +21,7 @@ class VerificarTokenSistema
 
         return in_array($rol, $this->rolesPermitidos, true)
             ? $rol
-            : 'admin';
+            : 'empleado';
     }
 
     public function handle(Request $request, Closure $next): Response
