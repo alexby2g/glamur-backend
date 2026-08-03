@@ -66,7 +66,7 @@ class VerificarTokenSistema
             ], 403);
         }
 
-        $rol = $this->normalizarRol($usuario->rol ?? 'admin');
+        $rol = $this->normalizarRol($usuario->rol ?? 'empleado');
 
         /*
         |--------------------------------------------------------------------------
