@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditoriaController;
 use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PagoController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\SyncController;
 use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Middleware\VerificarRolSistema;
+use App\Http\Middleware\RegistrarAuditoria;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,7 +35,7 @@ Route::get('/configuracion-publica', [ConfiguracionController::class, 'publica']
 // =====================================================
 // 🔒 RUTAS PROTEGIDAS CON TOKEN
 // =====================================================
-Route::middleware([VerificarTokenSistema::class])->group(function () {
+Route::middleware([VerificarTokenSistema::class, RegistrarAuditoria::class])->group(function () {
 
     // Sincronización de la aplicación Flutter (en línea / sin internet)
     Route::get('/sync/pull', [SyncController::class, 'pull']);
@@ -81,6 +83,9 @@ Route::middleware([VerificarTokenSistema::class])->group(function () {
         // 📊 DASHBOARD
         // =====================================================
         Route::get('/dashboard', [CitaController::class, 'dashboard']);
+
+        // Bitácora protegida: solo el administrador puede consultarla.
+        Route::get('/auditorias', [AuditoriaController::class, 'index']);
 
 
         // =====================================================
