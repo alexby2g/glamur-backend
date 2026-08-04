@@ -50,13 +50,22 @@ class CitaController extends Controller
             ], 422);
         }
 
-        $existe = Cita::where('fecha', $request->fecha)
+        $existe = Cita::whereDate('fecha', $request->fecha)
             ->where('hora', $request->hora)
+            ->where('estado', '!=', 'cancelada')
+            ->when(
+                $request->filled('empleado_id'),
+                fn ($query) => $query->where('empleado_id', $request->empleado_id),
+                fn ($query) => $query->whereNull('empleado_id')
+            )
             ->exists();
 
         if ($existe) {
             return response()->json([
-                'message' => 'Ya existe una cita en esa fecha y hora.',
+                'message' => 'Ese trabajador ya tiene una cita en la fecha y hora seleccionadas.',
+                'errors' => [
+                    'hora' => ['Selecciona otro horario u otro trabajador.'],
+                ],
             ], 422);
         }
 
@@ -125,14 +134,23 @@ class CitaController extends Controller
             ], 422);
         }
 
-        $existe = Cita::where('fecha', $request->fecha)
+        $existe = Cita::whereDate('fecha', $request->fecha)
             ->where('hora', $request->hora)
+            ->where('estado', '!=', 'cancelada')
             ->where('id', '!=', $id)
+            ->when(
+                $request->filled('empleado_id'),
+                fn ($query) => $query->where('empleado_id', $request->empleado_id),
+                fn ($query) => $query->whereNull('empleado_id')
+            )
             ->exists();
 
         if ($existe) {
             return response()->json([
-                'message' => 'Ya existe otra cita en ese horario.',
+                'message' => 'Ese trabajador ya tiene otra cita en la fecha y hora seleccionadas.',
+                'errors' => [
+                    'hora' => ['Selecciona otro horario u otro trabajador.'],
+                ],
             ], 422);
         }
 
