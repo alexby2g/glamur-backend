@@ -273,10 +273,18 @@ class SyncController extends Controller
         $collision = Cita::query()
             ->whereDate('fecha', $values['fecha'])
             ->where('hora', $values['hora'])
+            ->where('estado', '!=', 'cancelada')
+            ->when(
+                $empleado,
+                fn ($query) => $query->where('empleado_id', $empleado->id),
+                fn ($query) => $query->whereNull('empleado_id')
+            )
             ->when($model->exists, fn ($query) => $query->where('id', '!=', $model->id))
             ->exists();
         if ($collision) {
-            throw ValidationException::withMessages(['hora' => 'Ya existe otra cita en esa fecha y hora.']);
+            throw ValidationException::withMessages([
+                'hora' => 'Ese trabajador ya tiene una cita en la fecha y hora seleccionadas.',
+            ]);
         }
 
         $model->fill([
