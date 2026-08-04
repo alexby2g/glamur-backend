@@ -15,13 +15,29 @@ class RegistrarAuditoria
     private array $camposSensibles = [
         'password',
         'password_confirmation',
+        'current_password',
+        'new_password',
         'token',
+        'access_token',
+        'refresh_token',
         'codigo_registro',
         'authorization',
+        'api_key',
+        'secret',
         'foto',
         'foto_perfil',
         'imagen',
         'archivo',
+    ];
+
+    private array $fragmentosSensibles = [
+        'password',
+        'passwd',
+        'token',
+        'authorization',
+        'api_key',
+        'apikey',
+        'secret',
     ];
 
     public function handle(Request $request, Closure $next): Response
@@ -30,6 +46,7 @@ class RegistrarAuditoria
 
         if (
             in_array($request->method(), $this->metodosAuditables, true)
+            && !$request->is('api/logout', 'api/logout-all')
             && $response->getStatusCode() >= 200
             && $response->getStatusCode() < 400
         ) {
@@ -78,7 +95,7 @@ class RegistrarAuditoria
         $resultado = [];
 
         foreach ($datos as $clave => $valor) {
-            if (in_array(strtolower((string) $clave), $this->camposSensibles, true)) {
+            if ($this->esCampoSensible((string) $clave)) {
                 continue;
             }
 
@@ -93,6 +110,23 @@ class RegistrarAuditoria
         }
 
         return $resultado;
+    }
+
+    private function esCampoSensible(string $clave): bool
+    {
+        $clave = strtolower($clave);
+
+        if (in_array($clave, $this->camposSensibles, true)) {
+            return true;
+        }
+
+        foreach ($this->fragmentosSensibles as $fragmento) {
+            if (str_contains($clave, $fragmento)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function accion(Request $request): string
