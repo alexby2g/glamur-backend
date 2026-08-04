@@ -6,6 +6,7 @@ use App\Models\Pago;
 use App\Models\Cita;
 use App\Models\Notificacion;
 use App\Models\Configuracion;
+use App\Models\CierreCaja;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -148,6 +149,13 @@ class PagoController extends Controller
                 'message' => 'Datos inválidos',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        $fechaCaja = Carbon::now('America/La_Paz')->toDateString();
+        if (CierreCaja::whereDate('fecha', $fechaCaja)->where('estado', 'cerrada')->exists()) {
+            return response()->json([
+                'message' => 'La caja de hoy ya está cerrada. No se pueden registrar más pagos.',
+            ], 409);
         }
 
         $montos = $this->calcularMontosPago($request);

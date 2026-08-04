@@ -13,6 +13,7 @@ use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\SyncController;
+use App\Http\Controllers\CierreCajaController;
 use App\Http\Middleware\VerificarTokenSistema;
 use App\Http\Middleware\VerificarRolSistema;
 use App\Http\Middleware\RegistrarAuditoria;
@@ -139,6 +140,10 @@ Route::middleware([VerificarTokenSistema::class, RegistrarAuditoria::class])->gr
         // 🧾 CAJA DIARIA
         // =====================================================
         Route::get('/caja/diaria', [PagoController::class, 'cajaDiaria']);
+        Route::get('/caja/estado', [CierreCajaController::class, 'mostrar']);
+        Route::post('/caja/abrir', [CierreCajaController::class, 'abrir']);
+        Route::post('/caja/cerrar', [CierreCajaController::class, 'cerrar']);
+        Route::get('/caja/historial', [CierreCajaController::class, 'historial']);
 
 
         // =====================================================
